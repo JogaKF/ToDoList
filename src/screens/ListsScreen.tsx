@@ -27,6 +27,8 @@ export function ListsScreen() {
   const [editingListId, setEditingListId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
+  const [newListError, setNewListError] = useState<string | null>(null);
+  const [editingError, setEditingError] = useState<string | null>(null);
 
   const loadLists = useCallback(async () => {
     const [nextLists, nextSummaries] = await Promise.all([
@@ -51,24 +53,30 @@ export function ListsScreen() {
   );
 
   const handleCreateList = useCallback(async () => {
-    if (!newListName.trim()) {
+    const nextName = newListName.trim();
+    if (!nextName) {
+      setNewListError('Podaj nazwe listy.');
       return;
     }
 
-    await listsService.create(db, newListName, newListType);
+    await listsService.create(db, nextName, newListType);
     setNewListName('');
+    setNewListError(null);
     await loadLists();
   }, [db, loadLists, newListName, newListType]);
 
   const handleRenameList = useCallback(
     async (listId: string) => {
-      if (!editingName.trim()) {
+      const nextName = editingName.trim();
+      if (!nextName) {
+        setEditingError('Nazwa listy nie moze byc pusta.');
         return;
       }
 
-      await listsService.rename(db, listId, editingName);
+      await listsService.rename(db, listId, nextName);
       setEditingListId(null);
       setEditingName('');
+      setEditingError(null);
       setSelectedListId(null);
       await loadLists();
     },
@@ -99,9 +107,20 @@ export function ListsScreen() {
           placeholder="Np. Dom, Praca, Zakupy"
           placeholderTextColor={ui.colors.textSoft}
           value={newListName}
-          onChangeText={setNewListName}
+          onChangeText={(value) => {
+            setNewListName(value);
+            if (value.trim()) {
+              setNewListError(null);
+            }
+          }}
           style={styles.input}
+          maxLength={80}
+          returnKeyType="done"
+          onSubmitEditing={() => void handleCreateList()}
         />
+        <Text style={styles.inputHint}>
+          {newListError ?? 'Krotka, czytelna nazwa. Wszystko zapisze sie lokalnie.'}
+        </Text>
         <View style={styles.typeRow}>
           <PrimaryButton
             label="Taski"
@@ -117,6 +136,7 @@ export function ListsScreen() {
         <PrimaryButton
           label="Utworz liste"
           leadingIcon="+"
+          disabled={!newListName.trim()}
           onPress={() => void handleCreateList()}
         />
       </View>
@@ -143,12 +163,27 @@ export function ListsScreen() {
               style={[styles.listCard, isSelected && styles.listCardSelected]}
             >
               {isEditing ? (
-                <TextInput
-                  value={editingName}
-                  onChangeText={setEditingName}
-                  style={styles.input}
-                  placeholder="Nowa nazwa listy"
-                />
+                <>
+                  <TextInput
+                    value={editingName}
+                    onChangeText={(value) => {
+                      setEditingName(value);
+                      if (value.trim()) {
+                        setEditingError(null);
+                      }
+                    }}
+                    style={styles.input}
+                    placeholder="Nowa nazwa listy"
+                    placeholderTextColor={ui.colors.textSoft}
+                    autoFocus
+                    maxLength={80}
+                    returnKeyType="done"
+                    onSubmitEditing={() => void handleRenameList(list.id)}
+                  />
+                  <Text style={styles.inputHintInline}>
+                    {editingError ?? 'Nowa nazwa zapisze sie od razu w lokalnej bazie.'}
+                  </Text>
+                </>
               ) : (
                 <>
                   <Text style={styles.listName}>{list.name}</Text>
@@ -182,6 +217,7 @@ export function ListsScreen() {
                       onPress={() => {
                         setEditingListId(null);
                         setEditingName('');
+                        setEditingError(null);
                       }}
                     />
                   </>
@@ -199,6 +235,7 @@ export function ListsScreen() {
                           onPress={() => {
                             setEditingListId(list.id);
                             setEditingName(list.name);
+                            setEditingError(null);
                           }}
                         />
                         <IconButton
@@ -262,6 +299,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     backgroundColor: ui.colors.input,
     color: ui.colors.text,
+  },
+  inputHint: {
+    color: ui.colors.textMuted,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: -4,
+  },
+  inputHintInline: {
+    color: ui.colors.textMuted,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: -2,
   },
   typeRow: {
     flexDirection: 'row',

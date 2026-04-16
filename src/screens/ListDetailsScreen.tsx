@@ -36,6 +36,9 @@ export function ListDetailsScreen() {
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [newTaskError, setNewTaskError] = useState<string | null>(null);
+  const [editingError, setEditingError] = useState<string | null>(null);
+  const [draftErrors, setDraftErrors] = useState<Record<string, string>>({});
 
   const listId = route.params.listId;
   const isShoppingList = list?.type === 'shopping';
@@ -87,28 +90,39 @@ export function ListDetailsScreen() {
   }, [list?.name, navigation]);
 
   const handleCreateRootTask = useCallback(async () => {
-    if (!newTaskTitle.trim()) {
+    const nextTitle = newTaskTitle.trim();
+    if (!nextTitle) {
+      setNewTaskError(isShoppingList ? 'Podaj nazwe produktu.' : 'Podaj tytul taska.');
       return;
     }
 
     if (list?.type === 'shopping') {
-      await itemsService.createShoppingItem(db, listId, newTaskTitle);
+      await itemsService.createShoppingItem(db, listId, nextTitle);
     } else {
-      await itemsService.createTask(db, listId, newTaskTitle);
+      await itemsService.createTask(db, listId, nextTitle);
     }
     setNewTaskTitle('');
+    setNewTaskError(null);
     await loadData();
-  }, [db, list?.type, listId, loadData, newTaskTitle]);
+  }, [db, isShoppingList, list?.type, listId, loadData, newTaskTitle]);
 
   const handleCreateChildTask = useCallback(
     async (parentId: string) => {
       const title = draftChildren[parentId]?.trim();
       if (!title) {
+        setDraftErrors((current) => ({
+          ...current,
+          [parentId]: 'Wpisz nazwe subtaska przed zapisem.',
+        }));
         return;
       }
 
       await itemsService.createTask(db, listId, title, parentId);
       setDraftChildren((current) => ({
+        ...current,
+        [parentId]: '',
+      }));
+      setDraftErrors((current) => ({
         ...current,
         [parentId]: '',
       }));
@@ -161,13 +175,16 @@ export function ListDetailsScreen() {
 
   const handleRename = useCallback(
     async (itemId: string) => {
-      if (!editingTitle.trim()) {
+      const nextTitle = editingTitle.trim();
+      if (!nextTitle) {
+        setEditingError('Tytul nie moze byc pusty.');
         return;
       }
 
-      await itemsService.rename(db, itemId, editingTitle);
+      await itemsService.rename(db, itemId, nextTitle);
       setEditingItemId(null);
       setEditingTitle('');
+      setEditingError(null);
       setSelectedItemId(null);
       await loadData();
     },
@@ -215,14 +232,29 @@ export function ListDetailsScreen() {
         </Text>
         <TextInput
           value={newTaskTitle}
-          onChangeText={setNewTaskTitle}
+          onChangeText={(value) => {
+            setNewTaskTitle(value);
+            if (value.trim()) {
+              setNewTaskError(null);
+            }
+          }}
           placeholder={isShoppingList ? 'Np. Chleb, mleko, jajka' : 'Dodaj glowny task'}
           placeholderTextColor={ui.colors.textSoft}
           style={styles.input}
+          maxLength={120}
+          returnKeyType="done"
+          onSubmitEditing={() => void handleCreateRootTask()}
         />
+        <Text style={styles.inputHint}>
+          {newTaskError ??
+            (isShoppingList
+              ? 'Mozesz szybko budowac lokalna liste zakupow bez internetu.'
+              : 'Tworz glowny task i potem rozwijaj go subtaskami.')}
+        </Text>
         <PrimaryButton
           label={isShoppingList ? 'Dodaj produkt' : 'Dodaj task'}
           leadingIcon="+"
+          disabled={!newTaskTitle.trim()}
           onPress={() => void handleCreateRootTask()}
         />
       </View>
@@ -299,10 +331,19 @@ export function ListDetailsScreen() {
                   {isEditing ? (
                     <TextInput
                       value={editingTitle}
-                      onChangeText={setEditingTitle}
+                      onChangeText={(value) => {
+                        setEditingTitle(value);
+                        if (value.trim()) {
+                          setEditingError(null);
+                        }
+                      }}
                       style={styles.input}
                       placeholder="Nowy tytul"
                       placeholderTextColor={ui.colors.textSoft}
+                      autoFocus
+                      maxLength={120}
+                      returnKeyType="done"
+                      onSubmitEditing={() => void handleRename(item.id)}
                     />
                   ) : (
                     <>
@@ -328,6 +369,11 @@ export function ListDetailsScreen() {
 
               {isSelected || isEditing ? (
                 <View style={styles.actionsRow}>
+                  {isEditing ? (
+                    <Text style={styles.inputHintInline}>
+                      {editingError ?? 'Enter lub ikona potwierdzenia zapisze zmiane.'}
+                    </Text>
+                  ) : null}
                   <View style={styles.iconCluster}>
                     <IconButton
                       icon="arrow-up"
@@ -346,29 +392,31 @@ export function ListDetailsScreen() {
                         active={isInMyDay}
                       />
                     ) : null}
-                    {!isEditing ? (
-                      <IconButton
-                        icon="pencil-outline"
-                        onPress={() => {
-                          setEditingItemId(item.id);
-                          setEditingTitle(item.title);
-                        }}
-                      />
-                    ) : (
+                      {!isEditing ? (
+                        <IconButton
+                          icon="pencil-outline"
+                          onPress={() => {
+                            setEditingItemId(item.id);
+                            setEditingTitle(item.title);
+                            setEditingError(null);
+                          }}
+                        />
+                      ) : (
                       <>
                         <IconButton
                           icon="check"
                           tone="primary"
                           onPress={() => void handleRename(item.id)}
                         />
-                        <IconButton
-                          icon="close"
-                          onPress={() => {
-                            setEditingItemId(null);
-                            setEditingTitle('');
-                            setSelectedItemId(null);
-                          }}
-                        />
+                          <IconButton
+                            icon="close"
+                            onPress={() => {
+                              setEditingItemId(null);
+                              setEditingTitle('');
+                              setEditingError(null);
+                              setSelectedItemId(null);
+                            }}
+                          />
                       </>
                     )}
                     <IconButton
@@ -386,16 +434,31 @@ export function ListDetailsScreen() {
                     <>
                       <TextInput
                         value={draftChildren[item.id] ?? ''}
-                        onChangeText={(value) =>
+                        onChangeText={(value) => {
                           setDraftChildren((current) => ({
                             ...current,
                             [item.id]: value,
-                          }))
-                        }
+                          }));
+                          if (value.trim()) {
+                            setDraftErrors((current) => ({
+                              ...current,
+                              [item.id]: '',
+                            }));
+                          }
+                        }}
                         placeholder={item.parentId ? 'Dodaj kolejny poziom' : 'Dodaj subtask'}
                         placeholderTextColor={ui.colors.textSoft}
                         style={styles.input}
+                        maxLength={120}
+                        returnKeyType="done"
+                        onSubmitEditing={() => void handleCreateChildTask(item.id)}
                       />
+                      <Text style={styles.inputHintInline}>
+                        {draftErrors[item.id] ||
+                          (item.parentId
+                            ? 'Nowy poziom zapisze sie lokalnie pod tym elementem.'
+                            : 'Subtask pojawi sie od razu pod wybranym taskiem.')}
+                      </Text>
                       <View style={styles.subtaskActionsRow}>
                         <PrimaryButton
                           label={item.parentId ? 'Dodaj nizej' : 'Dodaj subtask'}
@@ -466,6 +529,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     backgroundColor: ui.colors.input,
     color: ui.colors.text,
+  },
+  inputHint: {
+    color: ui.colors.textMuted,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: -4,
+  },
+  inputHintInline: {
+    color: ui.colors.textMuted,
+    fontSize: 12,
+    lineHeight: 18,
   },
   treeWrap: {
     gap: 12,
