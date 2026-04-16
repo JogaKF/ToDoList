@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -50,6 +51,12 @@ export function ListDetailsScreen() {
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadData();
+    }, [loadData])
+  );
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -134,6 +141,9 @@ export function ListDetailsScreen() {
         <Text style={styles.headerTitle}>{list?.name ?? 'Lista'}</Text>
         <Text style={styles.headerMeta}>
           {list?.type === 'shopping' ? 'Tryb zakupow' : 'Tryb taskow'}
+        </Text>
+        <Text style={styles.headerSubmeta}>
+          {visibleItems.length} aktywnych pozycji w drzewie
         </Text>
       </View>
 
@@ -284,6 +294,10 @@ const styles = StyleSheet.create({
   headerMeta: {
     color: '#D7E6D2',
     fontSize: 14,
+  },
+  headerSubmeta: {
+    color: '#E9F1E5',
+    fontSize: 13,
   },
   composerCard: {
     backgroundColor: '#FFFDF8',

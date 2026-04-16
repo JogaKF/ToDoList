@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useFocusEffect } from '@react-navigation/native';
 
+import { PrimaryButton } from '../components/common/PrimaryButton';
 import { ScreenContainer } from '../components/common/ScreenContainer';
 import { useAppDatabase } from '../db/sqlite';
 import { listsService } from '../features/lists/service';
@@ -17,6 +19,7 @@ type GroupedItems = {
 
 export function MyDayScreen() {
   const db = useAppDatabase();
+  const tabBarHeight = useBottomTabBarHeight();
   const [items, setItems] = useState<Item[]>([]);
   const [lists, setLists] = useState<TodoList[]>([]);
 
@@ -56,7 +59,7 @@ export function MyDayScreen() {
   }, [items, lists]);
 
   return (
-    <ScreenContainer>
+    <ScreenContainer bottomInset={tabBarHeight + 16}>
       <View style={styles.hero}>
         <Text style={styles.title}>Moj dzien</Text>
         <Text style={styles.subtitle}>
@@ -77,15 +80,33 @@ export function MyDayScreen() {
         <View key={group.list?.id ?? 'unknown'} style={styles.groupCard}>
           <Text style={styles.groupTitle}>{group.list?.name ?? 'Nieznana lista'}</Text>
           {group.items.map((item) => (
-            <View key={item.id} style={styles.itemRow}>
-              <View style={[styles.statusDot, item.status === 'done' && styles.statusDone]} />
-              <View style={styles.itemContent}>
-                <Text style={[styles.itemTitle, item.status === 'done' && styles.itemDone]}>
-                  {item.title}
-                </Text>
-                <Text style={styles.itemMeta}>
-                  {item.parentId ? 'Subtask' : 'Glowny task'} | {item.status}
-                </Text>
+            <View key={item.id} style={styles.itemCard}>
+              <View style={styles.itemRow}>
+                <View style={[styles.statusDot, item.status === 'done' && styles.statusDone]} />
+                <View style={styles.itemContent}>
+                  <Text style={[styles.itemTitle, item.status === 'done' && styles.itemDone]}>
+                    {item.title}
+                  </Text>
+                  <Text style={styles.itemMeta}>
+                    {item.parentId ? 'Subtask' : 'Glowny task'} | {item.status}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.actionsRow}>
+                <PrimaryButton
+                  label={item.status === 'done' ? 'Oznacz jako otwarte' : 'Oznacz jako zrobione'}
+                  onPress={() => {
+                    void myDayService.toggleDone(db, item).then(loadData);
+                  }}
+                  tone="muted"
+                />
+                <PrimaryButton
+                  label="Usun z Mojego dnia"
+                  onPress={() => {
+                    void myDayService.removeFromDay(db, item.id).then(loadData);
+                  }}
+                  tone="danger"
+                />
               </View>
             </View>
           ))}
@@ -142,6 +163,10 @@ const styles = StyleSheet.create({
     gap: 12,
     alignItems: 'flex-start',
   },
+  itemCard: {
+    gap: 10,
+    paddingTop: 4,
+  },
   statusDot: {
     width: 12,
     height: 12,
@@ -168,5 +193,10 @@ const styles = StyleSheet.create({
   itemMeta: {
     color: '#6B645C',
     fontSize: 13,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
 });

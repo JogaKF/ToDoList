@@ -9,3 +9,11 @@ export type TodoList = {
   updatedAt: string;
   deletedAt: string | null;
 };
+
+export type TodoListSummary = {
+  listId: string;
+  totalItems: number;
+  openItems: number;
+  doneItems: number;
+  myDayItems: number;
+};

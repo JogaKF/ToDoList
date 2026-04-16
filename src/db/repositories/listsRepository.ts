@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import type { TodoList } from '../../features/lists/types';
+import type { TodoList, TodoListSummary } from '../../features/lists/types';
 import { createId } from '../../utils/id';
 import { nowIso } from '../../utils/date';
 
@@ -23,6 +23,23 @@ export const listsRepository = {
       `SELECT * FROM lists
        WHERE id = ? AND deletedAt IS NULL`,
       id
+    );
+  },
+
+  async getSummaries(db: SQLiteDatabase) {
+    return db.getAllAsync<TodoListSummary>(
+      `SELECT
+         lists.id as listId,
+         COUNT(items.id) as totalItems,
+         COALESCE(SUM(CASE WHEN items.status = 'todo' THEN 1 ELSE 0 END), 0) as openItems,
+         COALESCE(SUM(CASE WHEN items.status = 'done' THEN 1 ELSE 0 END), 0) as doneItems,
+         COALESCE(SUM(CASE WHEN items.myDayDate IS NOT NULL THEN 1 ELSE 0 END), 0) as myDayItems
+       FROM lists
+       LEFT JOIN items
+         ON items.listId = lists.id
+        AND items.deletedAt IS NULL
+       WHERE lists.deletedAt IS NULL
+       GROUP BY lists.id`
     );
   },
 

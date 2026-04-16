@@ -11,6 +11,10 @@ export const listsService = {
     return listsRepository.getById(db, listId);
   },
 
+  getSummaries(db: SQLiteDatabase) {
+    return listsRepository.getSummaries(db);
+  },
+
   create(db: SQLiteDatabase, name: string, type: 'tasks' | 'shopping') {
     return listsRepository.create(db, { name, type });
   },

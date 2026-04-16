@@ -1,17 +1,18 @@
 import { PropsWithChildren } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 
-export function ScreenContainer({ children }: PropsWithChildren) {
-  const tabBarHeight = useBottomTabBarHeight();
+type ScreenContainerProps = PropsWithChildren<{
+  bottomInset?: number;
+}>;
 
+export function ScreenContainer({ children, bottomInset = 16 }: ScreenContainerProps) {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.root}
     >
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + 16 }]}
+        contentContainerStyle={[styles.content, { paddingBottom: bottomInset }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
