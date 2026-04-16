@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "ToDoList",
+    "slug": "todolist",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "android": {
+      "package": "com.jogakf.todolist"
+    },
+    "plugins": [
+      "expo-sqlite"
+    ]
+  }
+}
