@@ -25,6 +25,15 @@ export const itemsService = {
     });
   },
 
+  createShoppingItem(db: SQLiteDatabase, listId: string, title: string) {
+    return itemsRepository.create(db, {
+      listId,
+      title,
+      parentId: null,
+      type: 'shopping',
+    });
+  },
+
   rename(db: SQLiteDatabase, itemId: string, title: string) {
     return itemsRepository.updateTitle(db, itemId, title);
   },

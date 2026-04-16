@@ -35,8 +35,19 @@ export function ListDetailsScreen() {
   const [editingTitle, setEditingTitle] = useState('');
 
   const listId = route.params.listId;
+  const isShoppingList = list?.type === 'shopping';
 
   const visibleItems = useMemo(() => flattenVisibleTree(tree, expandedIds), [expandedIds, tree]);
+  const listSummary = useMemo(() => {
+    const doneItems = visibleItems.filter((item) => item.status === 'done').length;
+    const openItems = visibleItems.length - doneItems;
+
+    return {
+      totalItems: visibleItems.length,
+      doneItems,
+      openItems,
+    };
+  }, [visibleItems]);
 
   const loadData = useCallback(async () => {
     const [nextList, nextTree] = await Promise.all([
@@ -69,10 +80,14 @@ export function ListDetailsScreen() {
       return;
     }
 
-    await itemsService.createTask(db, listId, newTaskTitle);
+    if (list?.type === 'shopping') {
+      await itemsService.createShoppingItem(db, listId, newTaskTitle);
+    } else {
+      await itemsService.createTask(db, listId, newTaskTitle);
+    }
     setNewTaskTitle('');
     await loadData();
-  }, [db, listId, loadData, newTaskTitle]);
+  }, [db, list?.type, listId, loadData, newTaskTitle]);
 
   const handleCreateChildTask = useCallback(
     async (parentId: string) => {
@@ -140,34 +155,48 @@ export function ListDetailsScreen() {
       <View style={styles.headerCard}>
         <Text style={styles.headerTitle}>{list?.name ?? 'Lista'}</Text>
         <Text style={styles.headerMeta}>
-          {list?.type === 'shopping' ? 'Tryb zakupow' : 'Tryb taskow'}
+          {isShoppingList ? 'Tryb zakupow' : 'Tryb taskow'}
         </Text>
         <Text style={styles.headerSubmeta}>
-          {visibleItems.length} aktywnych pozycji w drzewie
+          {isShoppingList
+            ? `${listSummary.openItems} do kupienia, ${listSummary.doneItems} kupionych`
+            : `${listSummary.totalItems} aktywnych pozycji w drzewie`}
         </Text>
       </View>
 
       <View style={styles.composerCard}>
-        <Text style={styles.sectionTitle}>Nowy task</Text>
+        <Text style={styles.sectionTitle}>
+          {isShoppingList ? 'Nowa pozycja' : 'Nowy task'}
+        </Text>
         <TextInput
           value={newTaskTitle}
           onChangeText={setNewTaskTitle}
-          placeholder="Dodaj glowny task"
+          placeholder={isShoppingList ? 'Np. Chleb, mleko, jajka' : 'Dodaj glowny task'}
           style={styles.input}
         />
-        <PrimaryButton label="Dodaj task" onPress={() => void handleCreateRootTask()} />
+        <PrimaryButton
+          label={isShoppingList ? 'Dodaj produkt' : 'Dodaj task'}
+          onPress={() => void handleCreateRootTask()}
+        />
       </View>
 
       <View style={styles.treeWrap}>
         {visibleItems.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>Ta lista jest jeszcze pusta</Text>
-            <Text style={styles.emptyText}>Dodaj pierwszy task i buduj drzewo przez subtaski.</Text>
+            <Text style={styles.emptyTitle}>
+              {isShoppingList ? 'Lista zakupow jest jeszcze pusta' : 'Ta lista jest jeszcze pusta'}
+            </Text>
+            <Text style={styles.emptyText}>
+              {isShoppingList
+                ? 'Dodaj pierwsze produkty i odhaczaj je podczas zakupow.'
+                : 'Dodaj pierwszy task i buduj drzewo przez subtaski.'}
+            </Text>
           </View>
         ) : null}
 
         {visibleItems.map((item) => {
           const isEditing = editingItemId === item.id;
+          const canShowChildren = !isShoppingList;
 
           return (
             <View
@@ -175,14 +204,14 @@ export function ListDetailsScreen() {
               style={[
                 styles.itemCard,
                 {
-                  marginLeft: item.depth * 14,
-                  borderLeftWidth: item.depth > 0 ? 3 : 0,
-                  borderLeftColor: item.depth > 0 ? '#D8CFBF' : 'transparent',
+                  marginLeft: canShowChildren ? item.depth * 14 : 0,
+                  borderLeftWidth: canShowChildren && item.depth > 0 ? 3 : 0,
+                  borderLeftColor: canShowChildren && item.depth > 0 ? '#D8CFBF' : 'transparent',
                 },
               ]}
             >
               <View style={styles.itemTopRow}>
-                {item.hasChildren ? (
+                {canShowChildren && item.hasChildren ? (
                   <Pressable onPress={() => toggleExpanded(item.id)} style={styles.treeToggle}>
                     <Text style={styles.treeToggleText}>{expandedIds[item.id] ? '-' : '+'}</Text>
                   </Pressable>
@@ -214,7 +243,13 @@ export function ListDetailsScreen() {
                         {item.title}
                       </Text>
                       <Text style={styles.itemMeta}>
-                        {item.myDayDate ? `Moj dzien: ${item.myDayDate}` : 'Poza Moim dniem'}
+                        {isShoppingList
+                          ? item.status === 'done'
+                            ? 'Kupione'
+                            : 'Do kupienia'
+                          : item.myDayDate
+                            ? `Moj dzien: ${item.myDayDate}`
+                            : 'Poza Moim dniem'}
                       </Text>
                     </>
                   )}
@@ -224,13 +259,13 @@ export function ListDetailsScreen() {
               <View style={styles.actionsRow}>
                 {isEditing ? (
                   <PrimaryButton label="Zapisz" onPress={() => void handleRename(item.id)} />
-                ) : (
+                ) : !isShoppingList ? (
                   <PrimaryButton
                     label={item.myDayDate === todayKey() ? 'Usun z dnia' : 'Dodaj na dzis'}
                     onPress={() => void handleToggleMyDay(item)}
                     tone="muted"
                   />
-                )}
+                ) : null}
                 {!isEditing ? (
                   <PrimaryButton
                     label="Edytuj"
@@ -257,20 +292,25 @@ export function ListDetailsScreen() {
                 />
               </View>
 
-              <View style={styles.childComposer}>
-                <TextInput
-                  value={draftChildren[item.id] ?? ''}
-                  onChangeText={(value) =>
-                    setDraftChildren((current) => ({
-                      ...current,
-                      [item.id]: value,
-                    }))
-                  }
-                  placeholder="Dodaj subtask"
-                  style={styles.input}
-                />
-                <PrimaryButton label="Dodaj subtask" onPress={() => void handleCreateChildTask(item.id)} />
-              </View>
+              {canShowChildren ? (
+                <View style={styles.childComposer}>
+                  <TextInput
+                    value={draftChildren[item.id] ?? ''}
+                    onChangeText={(value) =>
+                      setDraftChildren((current) => ({
+                        ...current,
+                        [item.id]: value,
+                      }))
+                    }
+                    placeholder="Dodaj subtask"
+                    style={styles.input}
+                  />
+                  <PrimaryButton
+                    label="Dodaj subtask"
+                    onPress={() => void handleCreateChildTask(item.id)}
+                  />
+                </View>
+              ) : null}
             </View>
           );
         })}
