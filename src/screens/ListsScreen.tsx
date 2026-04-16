@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
+import { IconButton } from '../components/common/IconButton';
 import { PrimaryButton } from '../components/common/PrimaryButton';
 import { ScreenContainer } from '../components/common/ScreenContainer';
 import { useAppDatabase } from '../db/sqlite';
 import { listsService } from '../features/lists/service';
 import type { TodoList, TodoListSummary } from '../features/lists/types';
+import { ui } from '../theme/ui';
 
 import type { RootStackParamList } from '../app/navigation/types';
 
@@ -24,6 +26,7 @@ export function ListsScreen() {
   const [newListType, setNewListType] = useState<TodoList['type']>('tasks');
   const [editingListId, setEditingListId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
+  const [selectedListId, setSelectedListId] = useState<string | null>(null);
 
   const loadLists = useCallback(async () => {
     const [nextLists, nextSummaries] = await Promise.all([
@@ -66,6 +69,7 @@ export function ListsScreen() {
       await listsService.rename(db, listId, editingName);
       setEditingListId(null);
       setEditingName('');
+      setSelectedListId(null);
       await loadLists();
     },
     [db, editingName, loadLists]
@@ -82,17 +86,18 @@ export function ListsScreen() {
   return (
     <ScreenContainer bottomInset={tabBarHeight + 16}>
       <View style={styles.hero}>
-        <Text style={styles.eyebrow}>Offline-first MVP</Text>
+        <Text style={styles.eyebrow}>Offline-first command center</Text>
         <Text style={styles.title}>Twoje listy</Text>
         <Text style={styles.subtitle}>
-          Lokalna baza jest zrodlem prawdy. Tutaj budujemy prosty produkt, nie kombajn.
+          Wszystko zapisuje sie lokalnie. Szybko, bez internetu, bez chaosu.
         </Text>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Nowa lista</Text>
+        <Text style={styles.sectionTitle}>Utworz nowa liste</Text>
         <TextInput
           placeholder="Np. Dom, Praca, Zakupy"
+          placeholderTextColor={ui.colors.textSoft}
           value={newListName}
           onChangeText={setNewListName}
           style={styles.input}
@@ -109,14 +114,18 @@ export function ListsScreen() {
             tone={newListType === 'shopping' ? 'primary' : 'muted'}
           />
         </View>
-        <PrimaryButton label="Utworz liste" onPress={() => void handleCreateList()} />
+        <PrimaryButton
+          label="Utworz liste"
+          leadingIcon="+"
+          onPress={() => void handleCreateList()}
+        />
       </View>
 
       {lists.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyTitle}>Nie masz jeszcze zadnej listy</Text>
           <Text style={styles.emptyText}>
-            Zacznij od jednej prostej listy taskow. Zakupy i kolejne widoki spokojnie dolozymy potem.
+            Zacznij od jednej listy i potraktuj ja jak swoje lokalne centrum dowodzenia.
           </Text>
         </View>
       ) : null}
@@ -124,10 +133,15 @@ export function ListsScreen() {
       <View style={styles.listGroup}>
         {lists.map((list) => {
           const isEditing = editingListId === list.id;
+          const isSelected = selectedListId === list.id;
           const summary = summaries[list.id];
 
           return (
-            <View key={list.id} style={styles.listCard}>
+            <Pressable
+              key={list.id}
+              onPress={() => setSelectedListId((current) => (current === list.id ? null : list.id))}
+              style={[styles.listCard, isSelected && styles.listCardSelected]}
+            >
               {isEditing ? (
                 <TextInput
                   value={editingName}
@@ -157,39 +171,47 @@ export function ListsScreen() {
 
               <View style={styles.actionsRow}>
                 {isEditing ? (
-                  <PrimaryButton label="Zapisz" onPress={() => void handleRenameList(list.id)} />
+                  <>
+                    <IconButton
+                      icon="check"
+                      tone="primary"
+                      onPress={() => void handleRenameList(list.id)}
+                    />
+                    <IconButton
+                      icon="close"
+                      onPress={() => {
+                        setEditingListId(null);
+                        setEditingName('');
+                      }}
+                    />
+                  </>
                 ) : (
-                  <PrimaryButton
-                    label="Otworz"
-                    onPress={() => navigation.navigate('ListDetails', { listId: list.id })}
-                  />
+                  <>
+                    <PrimaryButton
+                      label="Otworz"
+                      leadingIcon="›"
+                      onPress={() => navigation.navigate('ListDetails', { listId: list.id })}
+                    />
+                    {isSelected ? (
+                      <View style={styles.iconCluster}>
+                        <IconButton
+                          icon="pencil-outline"
+                          onPress={() => {
+                            setEditingListId(list.id);
+                            setEditingName(list.name);
+                          }}
+                        />
+                        <IconButton
+                          icon="trash-can-outline"
+                          tone="danger"
+                          onPress={() => void handleDeleteList(list.id)}
+                        />
+                      </View>
+                    ) : null}
+                  </>
                 )}
-                {!isEditing ? (
-                  <PrimaryButton
-                    label="Zmien nazwe"
-                    onPress={() => {
-                      setEditingListId(list.id);
-                      setEditingName(list.name);
-                    }}
-                    tone="muted"
-                  />
-                ) : (
-                  <PrimaryButton
-                    label="Anuluj"
-                    onPress={() => {
-                      setEditingListId(null);
-                      setEditingName('');
-                    }}
-                    tone="muted"
-                  />
-                )}
-                <PrimaryButton
-                  label="Usun"
-                  onPress={() => void handleDeleteList(list.id)}
-                  tone="danger"
-                />
               </View>
-            </View>
+            </Pressable>
           );
         })}
       </View>
@@ -199,46 +221,47 @@ export function ListsScreen() {
 
 const styles = StyleSheet.create({
   hero: {
-    gap: 6,
+    gap: 8,
+    paddingTop: 8,
   },
   eyebrow: {
-    color: '#255F38',
-    fontSize: 12,
+    color: ui.colors.primary,
+    fontSize: 11,
     fontWeight: '800',
     textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: 1.6,
   },
   title: {
-    fontSize: 30,
+    fontSize: 34,
     fontWeight: '800',
-    color: '#1E1B18',
+    color: ui.colors.text,
   },
   subtitle: {
     fontSize: 15,
     lineHeight: 22,
-    color: '#5D564E',
+    color: ui.colors.textMuted,
   },
   card: {
-    backgroundColor: '#FFFDF8',
-    borderRadius: 20,
-    padding: 16,
+    backgroundColor: '#102238',
+    borderRadius: ui.radius.lg,
+    padding: 18,
     gap: 12,
     borderWidth: 1,
-    borderColor: '#DED6CA',
+    borderColor: '#1B405F',
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 19,
     fontWeight: '700',
-    color: '#1E1B18',
+    color: ui.colors.text,
   },
   input: {
     minHeight: 48,
     borderWidth: 1,
-    borderColor: '#D7CEC1',
-    borderRadius: 14,
+    borderColor: ui.colors.border,
+    borderRadius: 18,
     paddingHorizontal: 14,
-    backgroundColor: '#FFFFFF',
-    color: '#1E1B18',
+    backgroundColor: ui.colors.input,
+    color: ui.colors.text,
   },
   typeRow: {
     flexDirection: 'row',
@@ -248,38 +271,43 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   emptyState: {
-    backgroundColor: '#FFFDF8',
-    borderRadius: 18,
+    backgroundColor: '#0E2033',
+    borderRadius: ui.radius.md,
     padding: 18,
     gap: 6,
-    borderWidth: 1,
-    borderColor: '#DED6CA',
+    borderWidth: 0,
   },
   emptyTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1E1B18',
+    color: ui.colors.text,
   },
   emptyText: {
-    color: '#6B645C',
+    color: ui.colors.textMuted,
     lineHeight: 21,
   },
   listCard: {
-    backgroundColor: '#FFFDF8',
+    backgroundColor: 'rgba(12, 27, 43, 0.76)',
     borderRadius: 18,
     padding: 16,
-    gap: 12,
+    gap: 10,
     borderWidth: 1,
-    borderColor: '#DED6CA',
+    borderColor: 'rgba(25, 56, 82, 0.32)',
+  },
+  listCardSelected: {
+    backgroundColor: '#132D45',
+    borderColor: '#2F7AA2',
   },
   listName: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1E1B18',
+    color: ui.colors.text,
   },
   listMeta: {
-    color: '#70675E',
-    fontSize: 14,
+    color: ui.colors.textSoft,
+    fontSize: 13,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
   statsRow: {
     flexDirection: 'row',
@@ -287,19 +315,26 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   statPill: {
-    backgroundColor: '#EEE6DA',
+    backgroundColor: '#10263D',
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: '#234A6C',
   },
   statText: {
-    color: '#5A534B',
+    color: ui.colors.textMuted,
     fontSize: 12,
     fontWeight: '700',
   },
   actionsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  iconCluster: {
+    flexDirection: 'row',
     gap: 8,
   },
 });

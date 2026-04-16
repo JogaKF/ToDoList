@@ -1,0 +1,28 @@
+export const ui = {
+  colors: {
+    background: '#07111F',
+    backgroundTop: '#0D1B30',
+    panel: '#0F2137',
+    panelStrong: '#142B45',
+    panelSoft: '#10263F',
+    border: '#21486A',
+    borderStrong: '#3AA0C8',
+    text: '#F3F7FB',
+    textMuted: '#9EB5C7',
+    textSoft: '#7D98AE',
+    primary: '#1499C8',
+    primaryStrong: '#0F7CA4',
+    accent: '#8BFFB7',
+    danger: '#FF6C8C',
+    warning: '#FFB86B',
+    input: '#0B1C2E',
+    white: '#FFFFFF',
+    shadow: '#02060D',
+  },
+  radius: {
+    sm: 14,
+    md: 20,
+    lg: 28,
+    pill: 999,
+  },
+};

@@ -3,6 +3,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ui } from '../../theme/ui';
 import { ListsScreen } from '../../screens/ListsScreen';
 import { ListDetailsScreen } from '../../screens/ListDetailsScreen';
 import { MyDayScreen } from '../../screens/MyDayScreen';
@@ -16,11 +17,11 @@ const navigationTheme = {
   ...DefaultTheme,
   colors: {
     ...DefaultTheme.colors,
-    background: '#F4F1EA',
-    card: '#FFFDF8',
-    primary: '#255F38',
-    border: '#DED6CA',
-    text: '#1E1B18',
+    background: ui.colors.background,
+    card: ui.colors.panel,
+    primary: ui.colors.primary,
+    border: ui.colors.border,
+    text: ui.colors.text,
   },
 };
 
@@ -31,14 +32,37 @@ function HomeTabsNavigator() {
     <HomeTabs.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#255F38',
-        tabBarInactiveTintColor: '#7C746A',
+        tabBarActiveTintColor: ui.colors.primary,
+        tabBarInactiveTintColor: ui.colors.textSoft,
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '800',
+          textTransform: 'uppercase',
+          letterSpacing: 0.4,
+        },
         tabBarStyle: {
-          backgroundColor: '#FFFDF8',
-          borderTopColor: '#DED6CA',
-          height: 64 + insets.bottom,
-          paddingBottom: Math.max(insets.bottom, 8),
+          position: 'absolute',
+          left: 12,
+          right: 12,
+          bottom: 10,
+          backgroundColor: '#0D1E31',
+          borderTopColor: '#1E4667',
+          borderWidth: 1,
+          borderRadius: 24,
+          height: 72 + insets.bottom,
+          paddingBottom: Math.max(insets.bottom, 10),
           paddingTop: 8,
+          shadowColor: '#000000',
+          shadowOpacity: 0.35,
+          shadowRadius: 16,
+          shadowOffset: {
+            width: 0,
+            height: 8,
+          },
+          elevation: 8,
+        },
+        tabBarItemStyle: {
+          borderRadius: 18,
         },
       }}
     >
@@ -54,11 +78,14 @@ export function AppNavigator() {
       <RootStack.Navigator
         screenOptions={{
           headerStyle: {
-            backgroundColor: '#FFFDF8',
+            backgroundColor: '#0C1C2E',
           },
-          headerTintColor: '#1E1B18',
+          headerTintColor: ui.colors.text,
+          headerTitleStyle: {
+            fontWeight: '800',
+          },
           contentStyle: {
-            backgroundColor: '#F4F1EA',
+            backgroundColor: ui.colors.background,
           },
         }}
       >

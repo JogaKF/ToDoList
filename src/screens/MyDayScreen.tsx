@@ -10,6 +10,7 @@ import { listsService } from '../features/lists/service';
 import { myDayService } from '../features/my-day/service';
 import type { Item } from '../features/items/types';
 import type { TodoList } from '../features/lists/types';
+import { ui } from '../theme/ui';
 import { todayKey } from '../utils/date';
 
 type GroupedItems = {
@@ -61,6 +62,7 @@ export function MyDayScreen() {
   return (
     <ScreenContainer bottomInset={tabBarHeight + 16}>
       <View style={styles.hero}>
+        <Text style={styles.eyebrow}>Daily focus protocol</Text>
         <Text style={styles.title}>Moj dzien</Text>
         <Text style={styles.subtitle}>
           Widok na {todayKey()} oparty wylacznie o lokalna baze i pole `myDayDate`.
@@ -118,45 +120,52 @@ export function MyDayScreen() {
 
 const styles = StyleSheet.create({
   hero: {
-    gap: 6,
+    gap: 8,
+    paddingTop: 8,
+  },
+  eyebrow: {
+    color: ui.colors.accent,
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 1.6,
   },
   title: {
-    fontSize: 30,
+    fontSize: 34,
     fontWeight: '800',
-    color: '#1E1B18',
+    color: ui.colors.text,
   },
   subtitle: {
-    color: '#645D55',
+    color: ui.colors.textMuted,
     lineHeight: 22,
   },
   emptyState: {
-    backgroundColor: '#FFFDF8',
-    borderRadius: 18,
+    backgroundColor: '#0E2033',
+    borderRadius: ui.radius.md,
     padding: 18,
     gap: 6,
-    borderWidth: 1,
-    borderColor: '#DED6CA',
+    borderWidth: 0,
   },
   emptyTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1E1B18',
+    color: ui.colors.text,
   },
   emptyText: {
-    color: '#6B645C',
+    color: ui.colors.textMuted,
   },
   groupCard: {
-    backgroundColor: '#FFFDF8',
-    borderRadius: 18,
+    backgroundColor: 'rgba(12, 27, 43, 0.72)',
+    borderRadius: ui.radius.md,
     padding: 16,
-    gap: 12,
+    gap: 10,
     borderWidth: 1,
-    borderColor: '#DED6CA',
+    borderColor: 'rgba(25, 56, 82, 0.3)',
   },
   groupTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1E1B18',
+    color: ui.colors.text,
   },
   itemRow: {
     flexDirection: 'row',
@@ -164,18 +173,18 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   itemCard: {
-    gap: 10,
-    paddingTop: 4,
+    gap: 8,
+    paddingTop: 2,
   },
   statusDot: {
     width: 12,
     height: 12,
     borderRadius: 999,
-    backgroundColor: '#D1B178',
+    backgroundColor: ui.colors.warning,
     marginTop: 6,
   },
   statusDone: {
-    backgroundColor: '#255F38',
+    backgroundColor: ui.colors.accent,
   },
   itemContent: {
     flex: 1,
@@ -184,14 +193,14 @@ const styles = StyleSheet.create({
   itemTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1E1B18',
+    color: ui.colors.text,
   },
   itemDone: {
-    color: '#7F776E',
+    color: ui.colors.textSoft,
     textDecorationLine: 'line-through',
   },
   itemMeta: {
-    color: '#6B645C',
+    color: ui.colors.textMuted,
     fontSize: 13,
   },
   actionsRow: {
