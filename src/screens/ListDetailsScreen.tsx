@@ -16,7 +16,7 @@ import { useTreeUiStore } from '../features/items/useTreeUiStore';
 import { listsService } from '../features/lists/service';
 import type { TodoList } from '../features/lists/types';
 import { ui } from '../theme/ui';
-import { todayKey } from '../utils/date';
+import { dateKeyWithOffset, formatDateLabel, todayKey } from '../utils/date';
 
 import type { RootStackParamList } from '../app/navigation/types';
 
@@ -230,6 +230,14 @@ export function ListDetailsScreen() {
     [db, loadData]
   );
 
+  const handleSetMyDayDate = useCallback(
+    async (item: ItemTreeNode, dateKey: string) => {
+      await itemsService.addToMyDay(db, item.id, dateKey);
+      await loadData();
+    },
+    [db, loadData]
+  );
+
   const handleMoveItem = useCallback(
     async (item: ItemTreeNode, direction: 'up' | 'down') => {
       await itemsService.moveWithinSiblings(db, item, direction);
@@ -334,7 +342,9 @@ export function ListDetailsScreen() {
           const isEditing = editingItemId === item.id;
           const isSelected = selectedItemId === item.id;
           const canShowChildren = !isShoppingList;
-          const isInMyDay = item.myDayDate === todayKey();
+          const todayDateKey = todayKey();
+          const tomorrowDateKey = dateKeyWithOffset(1);
+          const isInMyDay = item.myDayDate === todayDateKey;
 
           return (
             <Pressable
@@ -481,6 +491,20 @@ export function ListDetailsScreen() {
                       onPress={() => confirmDelete(item)}
                     />
                   </View>
+                  {!isEditing && !isShoppingList ? (
+                    <View style={styles.scheduleRow}>
+                      <PrimaryButton
+                        label={`Dzis ${formatDateLabel(todayDateKey)}`}
+                        tone={item.myDayDate === todayDateKey ? 'primary' : 'muted'}
+                        onPress={() => void handleSetMyDayDate(item, todayDateKey)}
+                      />
+                      <PrimaryButton
+                        label={`Jutro ${formatDateLabel(tomorrowDateKey)}`}
+                        tone={item.myDayDate === tomorrowDateKey ? 'primary' : 'muted'}
+                        onPress={() => void handleSetMyDayDate(item, tomorrowDateKey)}
+                      />
+                    </View>
+                  ) : null}
                 </View>
               ) : null}
 
@@ -736,6 +760,11 @@ const styles = StyleSheet.create({
   childComposer: {
     gap: 8,
     paddingTop: 2,
+  },
+  scheduleRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   subtaskActionsRow: {
     flexDirection: 'row',

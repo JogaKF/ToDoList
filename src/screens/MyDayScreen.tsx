@@ -4,6 +4,7 @@ import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { IconButton } from '../components/common/IconButton';
+import { PrimaryButton } from '../components/common/PrimaryButton';
 import { ScreenContainer } from '../components/common/ScreenContainer';
 import { useAppDatabase } from '../db/sqlite';
 import { buildItemTree, collectExpandableIds, flattenVisibleTree } from '../features/items/tree';
@@ -13,7 +14,7 @@ import { myDayService } from '../features/my-day/service';
 import type { Item, ItemTreeNode } from '../features/items/types';
 import type { TodoList } from '../features/lists/types';
 import { ui } from '../theme/ui';
-import { todayKey } from '../utils/date';
+import { dateKeyWithOffset, formatDateLabel, todayKey } from '../utils/date';
 
 type GroupedItems = {
   list: TodoList | undefined;
@@ -26,16 +27,17 @@ export function MyDayScreen() {
   const { expandedIds, toggleExpanded, expandMany } = useTreeUiStore();
   const [items, setItems] = useState<Item[]>([]);
   const [lists, setLists] = useState<TodoList[]>([]);
+  const [selectedDate, setSelectedDate] = useState(todayKey());
 
   const loadData = useCallback(async () => {
     const [nextItems, nextLists] = await Promise.all([
-      myDayService.getItems(db),
+      myDayService.getItems(db, selectedDate),
       listsService.getAll(db),
     ]);
 
     setItems(nextItems);
     setLists(nextLists);
-  }, [db]);
+  }, [db, selectedDate]);
 
   useEffect(() => {
     void loadData();
@@ -77,15 +79,33 @@ export function MyDayScreen() {
         <Text style={styles.eyebrow}>Daily focus protocol</Text>
         <Text style={styles.title}>Moj dzien</Text>
         <Text style={styles.subtitle}>
-          Widok na {todayKey()} oparty wylacznie o lokalna baze i pole `myDayDate`.
+          Widok na {formatDateLabel(selectedDate)} oparty wylacznie o lokalna baze i pole `myDayDate`.
         </Text>
+      </View>
+
+      <View style={styles.daySwitcher}>
+        <PrimaryButton
+          label={`Wczoraj ${formatDateLabel(dateKeyWithOffset(-1))}`}
+          tone={selectedDate === dateKeyWithOffset(-1) ? 'primary' : 'muted'}
+          onPress={() => setSelectedDate(dateKeyWithOffset(-1))}
+        />
+        <PrimaryButton
+          label={`Dzis ${formatDateLabel(todayKey())}`}
+          tone={selectedDate === todayKey() ? 'primary' : 'muted'}
+          onPress={() => setSelectedDate(todayKey())}
+        />
+        <PrimaryButton
+          label={`Jutro ${formatDateLabel(dateKeyWithOffset(1))}`}
+          tone={selectedDate === dateKeyWithOffset(1) ? 'primary' : 'muted'}
+          onPress={() => setSelectedDate(dateKeyWithOffset(1))}
+        />
       </View>
 
       {groupedItems.length === 0 ? (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyTitle}>Brak zadan na dzisiaj</Text>
+          <Text style={styles.emptyTitle}>Brak zadan na wybrany dzien</Text>
           <Text style={styles.emptyText}>
-            Otworz dowolna liste i oznacz zadanie przyciskiem "Dodaj na dzis".
+            Otworz dowolna liste i zaplanuj zadanie na dzis albo jutro bez internetu.
           </Text>
         </View>
       ) : null}
@@ -93,7 +113,9 @@ export function MyDayScreen() {
       {groupedItems.map((group) => (
         <View key={group.list?.id ?? 'unknown'} style={styles.groupCard}>
           <Text style={styles.groupTitle}>{group.list?.name ?? 'Nieznana lista'}</Text>
-          {flattenVisibleTree(group.tree, expandedIds).map((item) => (
+          {flattenVisibleTree(group.tree, expandedIds)
+            .filter((item) => item.status === 'todo')
+            .map((item) => (
             <View
               key={item.id}
               style={[
@@ -139,6 +161,65 @@ export function MyDayScreen() {
               </View>
             </View>
           ))}
+          {flattenVisibleTree(group.tree, expandedIds).some((item) => item.status === 'done') ? (
+            <View style={styles.doneSection}>
+              <Text style={styles.doneSectionTitle}>Zrobione</Text>
+              {flattenVisibleTree(group.tree, expandedIds)
+                .filter((item) => item.status === 'done')
+                .map((item) => (
+                  <View
+                    key={item.id}
+                    style={[
+                      styles.itemCard,
+                      {
+                        marginLeft: item.depth * 12,
+                        borderLeftWidth: item.depth > 0 ? 2 : 0,
+                        borderLeftColor: item.depth > 0 ? 'rgba(29, 77, 105, 0.65)' : 'transparent',
+                      },
+                    ]}
+                  >
+                    <View style={styles.itemRow}>
+                      {item.hasChildren ? (
+                        <Pressable onPress={() => toggleExpanded(item.id)} style={styles.treeToggle}>
+                          <Text style={styles.treeToggleText}>{expandedIds[item.id] ? '⌄' : '›'}</Text>
+                        </Pressable>
+                      ) : (
+                        <View style={styles.treeSpacer} />
+                      )}
+                      <Pressable
+                        onPress={() => {
+                          void myDayService.toggleDone(db, item).then(loadData);
+                        }}
+                        style={[styles.checkbox, item.status === 'done' && styles.checkboxDone]}
+                      >
+                        <Text style={styles.checkboxLabel}>{item.status === 'done' ? '✓' : ''}</Text>
+                      </Pressable>
+                      <View style={styles.itemContent}>
+                        <Text style={[styles.itemTitle, item.status === 'done' && styles.itemDone]}>
+                          {item.title}
+                        </Text>
+                        <Text style={styles.itemMeta}>
+                          {item.parentId ? 'Subtask' : 'Glowny task'} | {item.status}
+                        </Text>
+                      </View>
+                      <IconButton
+                        icon="weather-sunny"
+                        onPress={() => {
+                          void myDayService.moveToDay(db, item.id, dateKeyWithOffset(1)).then(loadData);
+                        }}
+                      />
+                      <IconButton
+                        icon="weather-sunset-down"
+                        tone="danger"
+                        onPress={() => {
+                          void myDayService.removeFromDay(db, item.id).then(loadData);
+                        }}
+                      />
+                    </View>
+                  </View>
+                ))}
+            </View>
+          ) : null}
         </View>
       ))}
     </ScreenContainer>
@@ -172,6 +253,11 @@ const styles = StyleSheet.create({
     padding: 18,
     gap: 6,
     borderWidth: 0,
+  },
+  daySwitcher: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   emptyTitle: {
     fontSize: 18,
@@ -251,5 +337,18 @@ const styles = StyleSheet.create({
   itemMeta: {
     color: ui.colors.textMuted,
     fontSize: 13,
+  },
+  doneSection: {
+    gap: 8,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(25, 56, 82, 0.3)',
+  },
+  doneSectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: ui.colors.textSoft,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
 });
