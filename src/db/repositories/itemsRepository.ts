@@ -127,15 +127,38 @@ export const itemsRepository = {
 
   async toggleStatus(db: SQLiteDatabase, item: Item) {
     const nextStatus = item.status === 'todo' ? 'done' : 'todo';
+    const timestamp = nowIso();
 
-    await db.runAsync(
-      `UPDATE items
-       SET status = ?, updatedAt = ?
-       WHERE id = ?`,
-      nextStatus,
-      nowIso(),
-      item.id
-    );
+    await db.withExclusiveTransactionAsync(async () => {
+      const descendantIds = await this.getDescendantIds(db, item.id);
+      const targetIds = [item.id, ...descendantIds];
+
+      for (const targetId of targetIds) {
+        await db.runAsync(
+          `UPDATE items
+           SET status = ?, updatedAt = ?
+           WHERE id = ? AND deletedAt IS NULL`,
+          nextStatus,
+          timestamp,
+          targetId
+        );
+      }
+
+      if (nextStatus === 'todo') {
+        const ancestorIds = await this.getAncestorIds(db, item.parentId);
+
+        for (const ancestorId of ancestorIds) {
+          await db.runAsync(
+            `UPDATE items
+             SET status = ?, updatedAt = ?
+             WHERE id = ? AND deletedAt IS NULL`,
+            'todo',
+            timestamp,
+            ancestorId
+          );
+        }
+      }
+    });
   },
 
   async setMyDay(db: SQLiteDatabase, id: string, dateKey: string | null) {
@@ -196,6 +219,31 @@ export const itemsRepository = {
 
       result.push(currentId);
       queue.push(...(childrenByParent.get(currentId) ?? []));
+    }
+
+    return result;
+  },
+
+  async getAncestorIds(db: SQLiteDatabase, parentId: string | null) {
+    if (!parentId) {
+      return [];
+    }
+
+    const allItems = await db.getAllAsync<Pick<Item, 'id' | 'parentId'>>(
+      `SELECT id, parentId FROM items WHERE deletedAt IS NULL`
+    );
+
+    const parentById = new Map<string, string | null>();
+    for (const item of allItems) {
+      parentById.set(item.id, item.parentId);
+    }
+
+    const result: string[] = [];
+    let currentParentId: string | null = parentId;
+
+    while (currentParentId) {
+      result.push(currentParentId);
+      currentParentId = parentById.get(currentParentId) ?? null;
     }
 
     return result;
