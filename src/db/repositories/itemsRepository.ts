@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import type { Item } from '../../features/items/types';
+import type { DeletedItem, Item } from '../../features/items/types';
 import { createId } from '../../utils/id';
 import { nowIso } from '../../utils/date';
 
@@ -27,6 +27,17 @@ export const itemsRepository = {
        WHERE myDayDate = ? AND deletedAt IS NULL
        ORDER BY position ASC, createdAt ASC`,
       dateKey
+    );
+  },
+
+  async getDeleted(db: SQLiteDatabase) {
+    return db.getAllAsync<DeletedItem>(
+      `SELECT items.*, lists.name as listName
+       FROM items
+       INNER JOIN lists ON lists.id = items.listId
+       WHERE items.deletedAt IS NOT NULL
+         AND lists.deletedAt IS NULL
+       ORDER BY items.deletedAt DESC, items.updatedAt DESC`
     );
   },
 
@@ -286,9 +297,28 @@ export const itemsRepository = {
     await this.moveToParent(db, item, parent.parentId ?? null);
   },
 
-  async getDescendantIds(db: SQLiteDatabase, rootId: string) {
+  async restore(db: SQLiteDatabase, id: string) {
+    const restoredAt = nowIso();
+
+    await db.withExclusiveTransactionAsync(async (txn) => {
+      const idsToRestore = await this.getDescendantIds(txn, id, true);
+      const targets = [id, ...idsToRestore];
+
+      for (const targetId of targets) {
+        await txn.runAsync(
+          `UPDATE items
+           SET deletedAt = NULL, updatedAt = ?
+           WHERE id = ?`,
+          restoredAt,
+          targetId
+        );
+      }
+    });
+  },
+
+  async getDescendantIds(db: SQLiteDatabase, rootId: string, includeDeleted = false) {
     const allItems = await db.getAllAsync<Pick<Item, 'id' | 'parentId'>>(
-      `SELECT id, parentId FROM items WHERE deletedAt IS NULL`
+      `SELECT id, parentId FROM items ${includeDeleted ? '' : 'WHERE deletedAt IS NULL'}`
     );
 
     const childrenByParent = new Map<string, string[]>();

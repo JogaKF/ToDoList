@@ -20,3 +20,8 @@ export type ItemTreeNode = Item & {
   children: ItemTreeNode[];
   hasChildren: boolean;
 };
+
+export type DeletedItem = Item & {
+  deletedAt: string;
+  listName: string;
+};

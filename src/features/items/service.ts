@@ -16,6 +16,10 @@ export const itemsService = {
     return itemsRepository.getMyDay(db, dateKey);
   },
 
+  getDeleted(db: SQLiteDatabase) {
+    return itemsRepository.getDeleted(db);
+  },
+
   createTask(db: SQLiteDatabase, listId: string, title: string, parentId?: string | null) {
     return itemsRepository.create(db, {
       listId,
@@ -80,6 +84,10 @@ export const itemsService = {
 
   removeMany(db: SQLiteDatabase, itemIds: string[]) {
     return itemsRepository.softDeleteMany(db, itemIds);
+  },
+
+  restore(db: SQLiteDatabase, itemId: string) {
+    return itemsRepository.restore(db, itemId);
   },
 
   addToMyDay(db: SQLiteDatabase, itemId: string, dateKey = todayKey()) {

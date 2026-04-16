@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import type { TodoList, TodoListSummary } from '../../features/lists/types';
+import type { DeletedTodoList, TodoList, TodoListSummary } from '../../features/lists/types';
 import { createId } from '../../utils/id';
 import { nowIso } from '../../utils/date';
 
@@ -23,6 +23,14 @@ export const listsRepository = {
       `SELECT * FROM lists
        WHERE id = ? AND deletedAt IS NULL`,
       id
+    );
+  },
+
+  async getDeleted(db: SQLiteDatabase) {
+    return db.getAllAsync<DeletedTodoList>(
+      `SELECT * FROM lists
+       WHERE deletedAt IS NOT NULL
+       ORDER BY deletedAt DESC, updatedAt DESC`
     );
   },
 
@@ -101,6 +109,28 @@ export const listsRepository = {
          WHERE listId = ? AND deletedAt IS NULL`,
         deletedAt,
         deletedAt,
+        id
+      );
+    });
+  },
+
+  async restore(db: SQLiteDatabase, id: string) {
+    const restoredAt = nowIso();
+
+    await db.withExclusiveTransactionAsync(async (txn) => {
+      await txn.runAsync(
+        `UPDATE lists
+         SET deletedAt = NULL, updatedAt = ?
+         WHERE id = ?`,
+        restoredAt,
+        id
+      );
+
+      await txn.runAsync(
+        `UPDATE items
+         SET deletedAt = NULL, updatedAt = ?
+         WHERE listId = ?`,
+        restoredAt,
         id
       );
     });

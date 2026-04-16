@@ -7,6 +7,7 @@ import { ui } from '../../theme/ui';
 import { ListsScreen } from '../../screens/ListsScreen';
 import { ListDetailsScreen } from '../../screens/ListDetailsScreen';
 import { MyDayScreen } from '../../screens/MyDayScreen';
+import { TrashScreen } from '../../screens/TrashScreen';
 
 import type { HomeTabParamList, RootStackParamList } from './types';
 
@@ -68,6 +69,7 @@ function HomeTabsNavigator() {
     >
       <HomeTabs.Screen name="Lists" component={ListsScreen} options={{ title: 'Listy' }} />
       <HomeTabs.Screen name="MyDay" component={MyDayScreen} options={{ title: 'Moj dzien' }} />
+      <HomeTabs.Screen name="Trash" component={TrashScreen} options={{ title: 'Kosz' }} />
     </HomeTabs.Navigator>
   );
 }

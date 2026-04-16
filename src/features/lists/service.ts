@@ -11,6 +11,10 @@ export const listsService = {
     return listsRepository.getById(db, listId);
   },
 
+  getDeleted(db: SQLiteDatabase) {
+    return listsRepository.getDeleted(db);
+  },
+
   getSummaries(db: SQLiteDatabase) {
     return listsRepository.getSummaries(db);
   },
@@ -25,5 +29,9 @@ export const listsService = {
 
   remove(db: SQLiteDatabase, listId: string) {
     return listsRepository.softDelete(db, listId);
+  },
+
+  restore(db: SQLiteDatabase, listId: string) {
+    return listsRepository.restore(db, listId);
   },
 };

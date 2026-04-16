@@ -8,4 +8,5 @@ export type RootStackParamList = {
 export type HomeTabParamList = {
   Lists: undefined;
   MyDay: undefined;
+  Trash: undefined;
 };

@@ -17,3 +17,7 @@ export type TodoListSummary = {
   doneItems: number;
   myDayItems: number;
 };
+
+export type DeletedTodoList = TodoList & {
+  deletedAt: string;
+};
