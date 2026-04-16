@@ -8,6 +8,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { IconButton } from '../components/common/IconButton';
 import { PrimaryButton } from '../components/common/PrimaryButton';
 import { ScreenContainer } from '../components/common/ScreenContainer';
+import { StateCard } from '../components/common/StateCard';
 import { useAppDatabase } from '../db/sqlite';
 import { itemsService } from '../features/items/service';
 import { collectExpandableIds, flattenVisibleTree } from '../features/items/tree';
@@ -40,6 +41,8 @@ export function ListDetailsScreen() {
   const [newTaskError, setNewTaskError] = useState<string | null>(null);
   const [editingError, setEditingError] = useState<string | null>(null);
   const [draftErrors, setDraftErrors] = useState<Record<string, string>>({});
+  const [siblingErrors, setSiblingErrors] = useState<Record<string, string>>({});
+  const [isLoading, setIsLoading] = useState(true);
 
   const listId = route.params.listId;
   const isShoppingList = list?.type === 'shopping';
@@ -66,6 +69,7 @@ export function ListDetailsScreen() {
   }, [visibleItems]);
 
   const loadData = useCallback(async () => {
+    setIsLoading(true);
     const [nextList, nextTree] = await Promise.all([
       listsService.getById(db, listId),
       itemsService.getListTree(db, listId),
@@ -73,6 +77,7 @@ export function ListDetailsScreen() {
 
     setList(nextList ?? null);
     setTree(nextTree);
+    setIsLoading(false);
   }, [db, listId]);
 
   useEffect(() => {
@@ -349,17 +354,22 @@ export function ListDetailsScreen() {
       ) : null}
 
       <View style={styles.treeWrap}>
-        {visibleItems.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>
-              {isShoppingList ? 'Lista zakupow jest jeszcze pusta' : 'Ta lista jest jeszcze pusta'}
-            </Text>
-            <Text style={styles.emptyText}>
-              {isShoppingList
+        {isLoading ? (
+          <StateCard
+            title="Laduje zawartosc listy"
+            description="Buduje lokalne drzewo elementow i porzadkuje widok."
+          />
+        ) : null}
+
+        {!isLoading && visibleItems.length === 0 ? (
+          <StateCard
+            title={isShoppingList ? 'Lista zakupow jest jeszcze pusta' : 'Ta lista jest jeszcze pusta'}
+            description={
+              isShoppingList
                 ? 'Dodaj pierwsze produkty i odhaczaj je podczas zakupow.'
-                : 'Dodaj pierwszy task i buduj drzewo przez subtaski.'}
-            </Text>
-          </View>
+                : 'Dodaj pierwszy task i buduj drzewo przez subtaski.'
+            }
+          />
         ) : null}
 
         {(isShoppingList ? shoppingOpenItems : visibleItems).map((item) => {
@@ -780,22 +790,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
   },
-  emptyState: {
-    backgroundColor: '#0E2033',
-    borderRadius: ui.radius.md,
-    padding: 18,
-    gap: 6,
-    borderWidth: 0,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: ui.colors.text,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: ui.colors.textMuted,
-  },
   itemCard: {
     backgroundColor: 'rgba(12, 27, 43, 0.78)',
     borderRadius: 18,
@@ -911,4 +905,3 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 });
-  const [siblingErrors, setSiblingErrors] = useState<Record<string, string>>({});

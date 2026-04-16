@@ -5,6 +5,7 @@ import { useFocusEffect } from '@react-navigation/native';
 
 import { PrimaryButton } from '../components/common/PrimaryButton';
 import { ScreenContainer } from '../components/common/ScreenContainer';
+import { StateCard } from '../components/common/StateCard';
 import { useAppDatabase } from '../db/sqlite';
 import { itemsService } from '../features/items/service';
 import type { DeletedItem } from '../features/items/types';
@@ -17,8 +18,10 @@ export function TrashScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const [deletedLists, setDeletedLists] = useState<DeletedTodoList[]>([]);
   const [deletedItems, setDeletedItems] = useState<DeletedItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   const loadData = useCallback(async () => {
+    setIsLoading(true);
     const [nextLists, nextItems] = await Promise.all([
       listsService.getDeleted(db),
       itemsService.getDeleted(db),
@@ -26,6 +29,7 @@ export function TrashScreen() {
 
     setDeletedLists(nextLists);
     setDeletedItems(nextItems);
+    setIsLoading(false);
   }, [db]);
 
   useEffect(() => {
@@ -48,13 +52,19 @@ export function TrashScreen() {
         </Text>
       </View>
 
-      {deletedLists.length === 0 && deletedItems.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyTitle}>Kosz jest pusty</Text>
-          <Text style={styles.emptyText}>
-            Soft delete dziala. Gdy cos usuniesz, odzyskasz to tutaj.
-          </Text>
-        </View>
+      {isLoading ? (
+        <StateCard
+          title="Laduje kosz"
+          description="Sprawdzam lokalnie, co mozna jeszcze przywrocic."
+          tone="warning"
+        />
+      ) : null}
+
+      {!isLoading && deletedLists.length === 0 && deletedItems.length === 0 ? (
+        <StateCard
+          title="Kosz jest pusty"
+          description="Soft delete dziala. Gdy cos usuniesz, odzyskasz to tutaj."
+        />
       ) : null}
 
       {deletedLists.length > 0 ? (
@@ -125,20 +135,6 @@ const styles = StyleSheet.create({
   subtitle: {
     color: ui.colors.textMuted,
     lineHeight: 22,
-  },
-  emptyState: {
-    backgroundColor: '#0E2033',
-    borderRadius: ui.radius.md,
-    padding: 18,
-    gap: 6,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: ui.colors.text,
-  },
-  emptyText: {
-    color: ui.colors.textMuted,
   },
   section: {
     gap: 10,

@@ -6,6 +6,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { IconButton } from '../components/common/IconButton';
 import { PrimaryButton } from '../components/common/PrimaryButton';
 import { ScreenContainer } from '../components/common/ScreenContainer';
+import { StateCard } from '../components/common/StateCard';
 import { useAppDatabase } from '../db/sqlite';
 import { buildItemTree, collectExpandableIds, flattenVisibleTree } from '../features/items/tree';
 import { useTreeUiStore } from '../features/items/useTreeUiStore';
@@ -28,8 +29,10 @@ export function MyDayScreen() {
   const [items, setItems] = useState<Item[]>([]);
   const [lists, setLists] = useState<TodoList[]>([]);
   const [selectedDate, setSelectedDate] = useState(todayKey());
+  const [isLoading, setIsLoading] = useState(true);
 
   const loadData = useCallback(async () => {
+    setIsLoading(true);
     const [nextItems, nextLists] = await Promise.all([
       myDayService.getItems(db, selectedDate),
       listsService.getAll(db),
@@ -37,6 +40,7 @@ export function MyDayScreen() {
 
     setItems(nextItems);
     setLists(nextLists);
+    setIsLoading(false);
   }, [db, selectedDate]);
 
   useEffect(() => {
@@ -101,13 +105,18 @@ export function MyDayScreen() {
         />
       </View>
 
-      {groupedItems.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyTitle}>Brak zadan na wybrany dzien</Text>
-          <Text style={styles.emptyText}>
-            Otworz dowolna liste i zaplanuj zadanie na dzis albo jutro bez internetu.
-          </Text>
-        </View>
+      {isLoading ? (
+        <StateCard
+          title="Laduje plan dnia"
+          description="Zbieram z lokalnej bazy wszystko, co przypisales do wybranego dnia."
+        />
+      ) : null}
+
+      {!isLoading && groupedItems.length === 0 ? (
+        <StateCard
+          title="Brak zadan na wybrany dzien"
+          description="Otworz dowolna liste i zaplanuj zadanie na dzis albo jutro bez internetu."
+        />
       ) : null}
 
       {groupedItems.map((group) => (
@@ -247,25 +256,10 @@ const styles = StyleSheet.create({
     color: ui.colors.textMuted,
     lineHeight: 22,
   },
-  emptyState: {
-    backgroundColor: '#0E2033',
-    borderRadius: ui.radius.md,
-    padding: 18,
-    gap: 6,
-    borderWidth: 0,
-  },
   daySwitcher: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: ui.colors.text,
-  },
-  emptyText: {
-    color: ui.colors.textMuted,
   },
   groupCard: {
     backgroundColor: 'rgba(12, 27, 43, 0.72)',

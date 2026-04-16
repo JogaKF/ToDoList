@@ -7,6 +7,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { IconButton } from '../components/common/IconButton';
 import { PrimaryButton } from '../components/common/PrimaryButton';
 import { ScreenContainer } from '../components/common/ScreenContainer';
+import { StateCard } from '../components/common/StateCard';
 import { useAppDatabase } from '../db/sqlite';
 import { listsService } from '../features/lists/service';
 import type { TodoList, TodoListSummary } from '../features/lists/types';
@@ -29,8 +30,10 @@ export function ListsScreen() {
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
   const [newListError, setNewListError] = useState<string | null>(null);
   const [editingError, setEditingError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   const loadLists = useCallback(async () => {
+    setIsLoading(true);
     const [nextLists, nextSummaries] = await Promise.all([
       listsService.getAll(db),
       listsService.getSummaries(db),
@@ -40,6 +43,7 @@ export function ListsScreen() {
     setSummaries(
       Object.fromEntries(nextSummaries.map((summary) => [summary.listId, summary]))
     );
+    setIsLoading(false);
   }, [db]);
 
   useEffect(() => {
@@ -141,13 +145,18 @@ export function ListsScreen() {
         />
       </View>
 
-      {lists.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyTitle}>Nie masz jeszcze zadnej listy</Text>
-          <Text style={styles.emptyText}>
-            Zacznij od jednej listy i potraktuj ja jak swoje lokalne centrum dowodzenia.
-          </Text>
-        </View>
+      {isLoading ? (
+        <StateCard
+          title="Laduje lokalne listy"
+          description="Czytam dane z SQLite i przygotowuje Twoje centrum dowodzenia."
+        />
+      ) : null}
+
+      {!isLoading && lists.length === 0 ? (
+        <StateCard
+          title="Nie masz jeszcze zadnej listy"
+          description="Zacznij od jednej listy i potraktuj ja jak swoje lokalne centrum dowodzenia."
+        />
       ) : null}
 
       <View style={styles.listGroup}>
@@ -318,22 +327,6 @@ const styles = StyleSheet.create({
   },
   listGroup: {
     gap: 12,
-  },
-  emptyState: {
-    backgroundColor: '#0E2033',
-    borderRadius: ui.radius.md,
-    padding: 18,
-    gap: 6,
-    borderWidth: 0,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: ui.colors.text,
-  },
-  emptyText: {
-    color: ui.colors.textMuted,
-    lineHeight: 21,
   },
   listCard: {
     backgroundColor: 'rgba(12, 27, 43, 0.76)',
