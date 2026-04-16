@@ -78,6 +78,53 @@ export const itemsRepository = {
     );
   },
 
+  async moveWithinSiblings(db: SQLiteDatabase, item: Item, direction: 'up' | 'down') {
+    const siblings = await db.getAllAsync<Pick<Item, 'id' | 'position'>>(
+      `SELECT id, position
+       FROM items
+       WHERE listId = ?
+         AND deletedAt IS NULL
+         AND ((parentId IS NULL AND ? IS NULL) OR parentId = ?)
+       ORDER BY position ASC, createdAt ASC`,
+      item.listId,
+      item.parentId,
+      item.parentId
+    );
+
+    const currentIndex = siblings.findIndex((sibling) => sibling.id === item.id);
+    if (currentIndex === -1) {
+      return;
+    }
+
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    const target = siblings[targetIndex];
+    if (!target) {
+      return;
+    }
+
+    const timestamp = nowIso();
+
+    await db.withExclusiveTransactionAsync(async () => {
+      await db.runAsync(
+        `UPDATE items
+         SET position = ?, updatedAt = ?
+         WHERE id = ?`,
+        target.position,
+        timestamp,
+        item.id
+      );
+
+      await db.runAsync(
+        `UPDATE items
+         SET position = ?, updatedAt = ?
+         WHERE id = ?`,
+        item.position,
+        timestamp,
+        target.id
+      );
+    });
+  },
+
   async toggleStatus(db: SQLiteDatabase, item: Item) {
     const nextStatus = item.status === 'todo' ? 'done' : 'todo';
 

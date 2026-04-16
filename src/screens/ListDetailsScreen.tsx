@@ -9,7 +9,7 @@ import { PrimaryButton } from '../components/common/PrimaryButton';
 import { ScreenContainer } from '../components/common/ScreenContainer';
 import { useAppDatabase } from '../db/sqlite';
 import { itemsService } from '../features/items/service';
-import { flattenVisibleTree } from '../features/items/tree';
+import { collectExpandableIds, flattenVisibleTree } from '../features/items/tree';
 import type { ItemTreeNode } from '../features/items/types';
 import { useTreeUiStore } from '../features/items/useTreeUiStore';
 import { listsService } from '../features/lists/service';
@@ -25,7 +25,7 @@ export function ListDetailsScreen() {
   const db = useAppDatabase();
   const navigation = useNavigation<Navigation>();
   const route = useRoute<DetailsRoute>();
-  const { expandedIds, toggleExpanded, expandMany } = useTreeUiStore();
+  const { expandedIds, toggleExpanded, expandMany, collapseMany } = useTreeUiStore();
 
   const [list, setList] = useState<TodoList | null>(null);
   const [tree, setTree] = useState<ItemTreeNode[]>([]);
@@ -38,6 +38,7 @@ export function ListDetailsScreen() {
   const isShoppingList = list?.type === 'shopping';
 
   const visibleItems = useMemo(() => flattenVisibleTree(tree, expandedIds), [expandedIds, tree]);
+  const expandableIds = useMemo(() => collectExpandableIds(tree), [tree]);
   const listSummary = useMemo(() => {
     const doneItems = visibleItems.filter((item) => item.status === 'done').length;
     const openItems = visibleItems.length - doneItems;
@@ -150,6 +151,14 @@ export function ListDetailsScreen() {
     [db, loadData]
   );
 
+  const handleMoveItem = useCallback(
+    async (item: ItemTreeNode, direction: 'up' | 'down') => {
+      await itemsService.moveWithinSiblings(db, item, direction);
+      await loadData();
+    },
+    [db, loadData]
+  );
+
   return (
     <ScreenContainer>
       <View style={styles.headerCard}>
@@ -179,6 +188,21 @@ export function ListDetailsScreen() {
           onPress={() => void handleCreateRootTask()}
         />
       </View>
+
+      {!isShoppingList && expandableIds.length > 0 ? (
+        <View style={styles.toolbarRow}>
+          <PrimaryButton
+            label="Rozwin wszystko"
+            onPress={() => expandMany(expandableIds)}
+            tone="muted"
+          />
+          <PrimaryButton
+            label="Zwin wszystko"
+            onPress={() => collapseMany(expandableIds)}
+            tone="muted"
+          />
+        </View>
+      ) : null}
 
       <View style={styles.treeWrap}>
         {visibleItems.length === 0 ? (
@@ -251,12 +275,25 @@ export function ListDetailsScreen() {
                             ? `Moj dzien: ${item.myDayDate}`
                             : 'Poza Moim dniem'}
                       </Text>
+                      {!isShoppingList && item.parentId ? (
+                        <Text style={styles.itemHint}>Subtask</Text>
+                      ) : null}
                     </>
                   )}
                 </View>
               </View>
 
               <View style={styles.actionsRow}>
+                <PrimaryButton
+                  label="W gore"
+                  onPress={() => void handleMoveItem(item, 'up')}
+                  tone="muted"
+                />
+                <PrimaryButton
+                  label="W dol"
+                  onPress={() => void handleMoveItem(item, 'down')}
+                  tone="muted"
+                />
                 {isEditing ? (
                   <PrimaryButton label="Zapisz" onPress={() => void handleRename(item.id)} />
                 ) : !isShoppingList ? (
@@ -294,21 +331,34 @@ export function ListDetailsScreen() {
 
               {canShowChildren ? (
                 <View style={styles.childComposer}>
-                  <TextInput
-                    value={draftChildren[item.id] ?? ''}
-                    onChangeText={(value) =>
-                      setDraftChildren((current) => ({
-                        ...current,
-                        [item.id]: value,
-                      }))
-                    }
-                    placeholder="Dodaj subtask"
-                    style={styles.input}
-                  />
-                  <PrimaryButton
-                    label="Dodaj subtask"
-                    onPress={() => void handleCreateChildTask(item.id)}
-                  />
+                  {!isEditing ? (
+                    <>
+                      <TextInput
+                        value={draftChildren[item.id] ?? ''}
+                        onChangeText={(value) =>
+                          setDraftChildren((current) => ({
+                            ...current,
+                            [item.id]: value,
+                          }))
+                        }
+                        placeholder={item.parentId ? 'Dodaj kolejny poziom' : 'Dodaj subtask'}
+                        style={styles.input}
+                      />
+                      <View style={styles.subtaskActionsRow}>
+                        <PrimaryButton
+                          label={item.parentId ? 'Dodaj nizej' : 'Dodaj subtask'}
+                          onPress={() => void handleCreateChildTask(item.id)}
+                        />
+                        {item.hasChildren ? (
+                          <PrimaryButton
+                            label={expandedIds[item.id] ? 'Zwin galaz' : 'Rozwin galaz'}
+                            onPress={() => toggleExpanded(item.id)}
+                            tone="muted"
+                          />
+                        ) : null}
+                      </View>
+                    </>
+                  ) : null}
                 </View>
               ) : null}
             </View>
@@ -363,6 +413,11 @@ const styles = StyleSheet.create({
   },
   treeWrap: {
     gap: 12,
+  },
+  toolbarRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   emptyState: {
     backgroundColor: '#FFFDF8',
@@ -443,6 +498,12 @@ const styles = StyleSheet.create({
     color: '#6B645C',
     fontSize: 13,
   },
+  itemHint: {
+    color: '#8A7A65',
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
   actionsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -450,5 +511,10 @@ const styles = StyleSheet.create({
   },
   childComposer: {
     gap: 10,
+  },
+  subtaskActionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
 });

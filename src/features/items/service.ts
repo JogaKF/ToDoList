@@ -38,6 +38,10 @@ export const itemsService = {
     return itemsRepository.updateTitle(db, itemId, title);
   },
 
+  moveWithinSiblings(db: SQLiteDatabase, item: Item, direction: 'up' | 'down') {
+    return itemsRepository.moveWithinSiblings(db, item, direction);
+  },
+
   toggleDone(db: SQLiteDatabase, item: Item) {
     return itemsRepository.toggleStatus(db, item);
   },

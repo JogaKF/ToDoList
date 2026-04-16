@@ -55,3 +55,23 @@ export function flattenVisibleTree(nodes: ItemTreeNode[], expandedIds: Record<st
 
   return result;
 }
+
+export function collectExpandableIds(nodes: ItemTreeNode[]) {
+  const result: string[] = [];
+
+  const visit = (node: ItemTreeNode) => {
+    if (node.hasChildren) {
+      result.push(node.id);
+    }
+
+    for (const child of node.children) {
+      visit(child);
+    }
+  };
+
+  for (const node of nodes) {
+    visit(node);
+  }
+
+  return result;
+}
