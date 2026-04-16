@@ -13,6 +13,9 @@ const ICON_MAP = {
   'trash-can-outline': '⌫',
   'unfold-less-horizontal': '⌃',
   'unfold-more-horizontal': '⌄',
+  add: '+',
+  indent: '⇢',
+  outdent: '⇠',
 } as const;
 
 type IconName = keyof typeof ICON_MAP;

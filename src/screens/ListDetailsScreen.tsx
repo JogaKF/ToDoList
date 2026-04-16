@@ -33,6 +33,7 @@ export function ListDetailsScreen() {
   const [tree, setTree] = useState<ItemTreeNode[]>([]);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [draftChildren, setDraftChildren] = useState<Record<string, string>>({});
+  const [draftSiblings, setDraftSiblings] = useState<Record<string, string>>({});
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
@@ -132,6 +133,31 @@ export function ListDetailsScreen() {
     [db, draftChildren, expandMany, listId, loadData]
   );
 
+  const handleCreateSiblingTask = useCallback(
+    async (item: ItemTreeNode) => {
+      const title = draftSiblings[item.id]?.trim();
+      if (!title) {
+        setSiblingErrors((current) => ({
+          ...current,
+          [item.id]: 'Wpisz nazwe elementu obok przed zapisem.',
+        }));
+        return;
+      }
+
+      await itemsService.createSiblingTask(db, item, title);
+      setDraftSiblings((current) => ({
+        ...current,
+        [item.id]: '',
+      }));
+      setSiblingErrors((current) => ({
+        ...current,
+        [item.id]: '',
+      }));
+      await loadData();
+    },
+    [db, draftSiblings, loadData]
+  );
+
   const handleToggleDone = useCallback(
     async (item: ItemTreeNode) => {
       await itemsService.toggleDone(db, item);
@@ -207,6 +233,22 @@ export function ListDetailsScreen() {
   const handleMoveItem = useCallback(
     async (item: ItemTreeNode, direction: 'up' | 'down') => {
       await itemsService.moveWithinSiblings(db, item, direction);
+      await loadData();
+    },
+    [db, loadData]
+  );
+
+  const handleIndentItem = useCallback(
+    async (item: ItemTreeNode) => {
+      await itemsService.indentUnderPreviousSibling(db, item);
+      await loadData();
+    },
+    [db, loadData]
+  );
+
+  const handleOutdentItem = useCallback(
+    async (item: ItemTreeNode) => {
+      await itemsService.outdentOneLevel(db, item);
       await loadData();
     },
     [db, loadData]
@@ -386,6 +428,20 @@ export function ListDetailsScreen() {
                       disabled={isEditing}
                     />
                     {!isShoppingList ? (
+                      <>
+                        <IconButton
+                          icon="indent"
+                          onPress={() => void handleIndentItem(item)}
+                          disabled={isEditing}
+                        />
+                        <IconButton
+                          icon="outdent"
+                          onPress={() => void handleOutdentItem(item)}
+                          disabled={isEditing || !item.parentId}
+                        />
+                      </>
+                    ) : null}
+                    {!isShoppingList ? (
                       <IconButton
                         icon={isInMyDay ? 'weather-sunset-down' : 'weather-sunny'}
                         onPress={() => void handleToggleMyDay(item)}
@@ -430,7 +486,10 @@ export function ListDetailsScreen() {
 
               {canShowChildren ? (
                 <View style={styles.childComposer}>
-                  {!isEditing && (isSelected || (draftChildren[item.id] ?? '').length > 0) ? (
+                  {!isEditing &&
+                  (isSelected ||
+                    (draftChildren[item.id] ?? '').length > 0 ||
+                    (draftSiblings[item.id] ?? '').length > 0) ? (
                     <>
                       <TextInput
                         value={draftChildren[item.id] ?? ''}
@@ -459,11 +518,42 @@ export function ListDetailsScreen() {
                             ? 'Nowy poziom zapisze sie lokalnie pod tym elementem.'
                             : 'Subtask pojawi sie od razu pod wybranym taskiem.')}
                       </Text>
+                      <TextInput
+                        value={draftSiblings[item.id] ?? ''}
+                        onChangeText={(value) => {
+                          setDraftSiblings((current) => ({
+                            ...current,
+                            [item.id]: value,
+                          }));
+                          if (value.trim()) {
+                            setSiblingErrors((current) => ({
+                              ...current,
+                              [item.id]: '',
+                            }));
+                          }
+                        }}
+                        placeholder="Dodaj rownolegle obok tego elementu"
+                        placeholderTextColor={ui.colors.textSoft}
+                        style={styles.input}
+                        maxLength={120}
+                        returnKeyType="done"
+                        onSubmitEditing={() => void handleCreateSiblingTask(item)}
+                      />
+                      <Text style={styles.inputHintInline}>
+                        {siblingErrors[item.id] ||
+                          'Nowy element trafi obok aktualnego, na tym samym poziomie.'}
+                      </Text>
                       <View style={styles.subtaskActionsRow}>
                         <PrimaryButton
                           label={item.parentId ? 'Dodaj nizej' : 'Dodaj subtask'}
                           leadingIcon="+"
                           onPress={() => void handleCreateChildTask(item.id)}
+                        />
+                        <PrimaryButton
+                          label="Dodaj obok"
+                          leadingIcon="+"
+                          tone="muted"
+                          onPress={() => void handleCreateSiblingTask(item)}
                         />
                         {item.hasChildren ? (
                           <IconButton
@@ -659,3 +749,4 @@ const styles = StyleSheet.create({
     gap: 8,
   },
 });
+  const [siblingErrors, setSiblingErrors] = useState<Record<string, string>>({});

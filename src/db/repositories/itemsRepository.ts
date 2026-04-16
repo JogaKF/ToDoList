@@ -78,6 +78,29 @@ export const itemsRepository = {
     );
   },
 
+  async moveToParent(db: SQLiteDatabase, item: Item, nextParentId: string | null) {
+    const nextPosition = await this.getNextPosition(db, item.listId, nextParentId);
+
+    await db.runAsync(
+      `UPDATE items
+       SET parentId = ?, position = ?, updatedAt = ?
+       WHERE id = ?`,
+      nextParentId,
+      nextPosition,
+      nowIso(),
+      item.id
+    );
+  },
+
+  async createSibling(db: SQLiteDatabase, item: Item, title: string) {
+    return this.create(db, {
+      listId: item.listId,
+      title,
+      parentId: item.parentId,
+      type: item.type,
+    });
+  },
+
   async moveWithinSiblings(db: SQLiteDatabase, item: Item, direction: 'up' | 'down') {
     const siblings = await db.getAllAsync<Pick<Item, 'id' | 'position'>>(
       `SELECT id, position
@@ -199,6 +222,47 @@ export const itemsRepository = {
         );
       }
     });
+  },
+
+  async indentUnderPreviousSibling(db: SQLiteDatabase, item: Item) {
+    const siblings = await db.getAllAsync<Pick<Item, 'id' | 'position'>>(
+      `SELECT id, position
+       FROM items
+       WHERE listId = ?
+         AND deletedAt IS NULL
+         AND ((parentId IS NULL AND ? IS NULL) OR parentId = ?)
+       ORDER BY position ASC, createdAt ASC`,
+      item.listId,
+      item.parentId,
+      item.parentId
+    );
+
+    const currentIndex = siblings.findIndex((sibling) => sibling.id === item.id);
+    const previousSibling = currentIndex > 0 ? siblings[currentIndex - 1] : null;
+    if (!previousSibling) {
+      return;
+    }
+
+    await this.moveToParent(db, item, previousSibling.id);
+  },
+
+  async outdentOneLevel(db: SQLiteDatabase, item: Item) {
+    if (!item.parentId) {
+      return;
+    }
+
+    const parent = await db.getFirstAsync<Pick<Item, 'id' | 'parentId'>>(
+      `SELECT id, parentId
+       FROM items
+       WHERE id = ? AND deletedAt IS NULL`,
+      item.parentId
+    );
+
+    if (!parent) {
+      return;
+    }
+
+    await this.moveToParent(db, item, parent.parentId ?? null);
   },
 
   async getDescendantIds(db: SQLiteDatabase, rootId: string) {

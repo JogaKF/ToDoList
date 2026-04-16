@@ -34,12 +34,24 @@ export const itemsService = {
     });
   },
 
+  createSiblingTask(db: SQLiteDatabase, item: Item, title: string) {
+    return itemsRepository.createSibling(db, item, title);
+  },
+
   rename(db: SQLiteDatabase, itemId: string, title: string) {
     return itemsRepository.updateTitle(db, itemId, title);
   },
 
   moveWithinSiblings(db: SQLiteDatabase, item: Item, direction: 'up' | 'down') {
     return itemsRepository.moveWithinSiblings(db, item, direction);
+  },
+
+  indentUnderPreviousSibling(db: SQLiteDatabase, item: Item) {
+    return itemsRepository.indentUnderPreviousSibling(db, item);
+  },
+
+  outdentOneLevel(db: SQLiteDatabase, item: Item) {
+    return itemsRepository.outdentOneLevel(db, item);
   },
 
   toggleDone(db: SQLiteDatabase, item: Item) {
