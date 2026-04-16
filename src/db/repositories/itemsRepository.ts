@@ -104,8 +104,8 @@ export const itemsRepository = {
 
     const timestamp = nowIso();
 
-    await db.withExclusiveTransactionAsync(async () => {
-      await db.runAsync(
+    await db.withExclusiveTransactionAsync(async (txn) => {
+      await txn.runAsync(
         `UPDATE items
          SET position = ?, updatedAt = ?
          WHERE id = ?`,
@@ -114,7 +114,7 @@ export const itemsRepository = {
         item.id
       );
 
-      await db.runAsync(
+      await txn.runAsync(
         `UPDATE items
          SET position = ?, updatedAt = ?
          WHERE id = ?`,
@@ -129,12 +129,12 @@ export const itemsRepository = {
     const nextStatus = item.status === 'todo' ? 'done' : 'todo';
     const timestamp = nowIso();
 
-    await db.withExclusiveTransactionAsync(async () => {
-      const descendantIds = await this.getDescendantIds(db, item.id);
+    await db.withExclusiveTransactionAsync(async (txn) => {
+      const descendantIds = await this.getDescendantIds(txn, item.id);
       const targetIds = [item.id, ...descendantIds];
 
       for (const targetId of targetIds) {
-        await db.runAsync(
+        await txn.runAsync(
           `UPDATE items
            SET status = ?, updatedAt = ?
            WHERE id = ? AND deletedAt IS NULL`,
@@ -145,10 +145,10 @@ export const itemsRepository = {
       }
 
       if (nextStatus === 'todo') {
-        const ancestorIds = await this.getAncestorIds(db, item.parentId);
+        const ancestorIds = await this.getAncestorIds(txn, item.parentId);
 
         for (const ancestorId of ancestorIds) {
-          await db.runAsync(
+          await txn.runAsync(
             `UPDATE items
              SET status = ?, updatedAt = ?
              WHERE id = ? AND deletedAt IS NULL`,
@@ -162,25 +162,34 @@ export const itemsRepository = {
   },
 
   async setMyDay(db: SQLiteDatabase, id: string, dateKey: string | null) {
-    await db.runAsync(
-      `UPDATE items
-       SET myDayDate = ?, updatedAt = ?
-       WHERE id = ?`,
-      dateKey,
-      nowIso(),
-      id
-    );
+    const timestamp = nowIso();
+
+    await db.withExclusiveTransactionAsync(async (txn) => {
+      const descendantIds = await this.getDescendantIds(txn, id);
+      const targetIds = [id, ...descendantIds];
+
+      for (const targetId of targetIds) {
+        await txn.runAsync(
+          `UPDATE items
+           SET myDayDate = ?, updatedAt = ?
+           WHERE id = ? AND deletedAt IS NULL`,
+          dateKey,
+          timestamp,
+          targetId
+        );
+      }
+    });
   },
 
   async softDelete(db: SQLiteDatabase, id: string) {
     const deletedAt = nowIso();
 
-    await db.withExclusiveTransactionAsync(async () => {
-      const idsToDelete = await this.getDescendantIds(db, id);
+    await db.withExclusiveTransactionAsync(async (txn) => {
+      const idsToDelete = await this.getDescendantIds(txn, id);
       const targets = [id, ...idsToDelete];
 
       for (const targetId of targets) {
-        await db.runAsync(
+        await txn.runAsync(
           `UPDATE items
            SET deletedAt = ?, updatedAt = ?
            WHERE id = ? AND deletedAt IS NULL`,

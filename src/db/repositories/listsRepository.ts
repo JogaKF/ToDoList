@@ -85,8 +85,8 @@ export const listsRepository = {
   async softDelete(db: SQLiteDatabase, id: string) {
     const deletedAt = nowIso();
 
-    await db.withExclusiveTransactionAsync(async () => {
-      await db.runAsync(
+    await db.withExclusiveTransactionAsync(async (txn) => {
+      await txn.runAsync(
         `UPDATE lists
          SET deletedAt = ?, updatedAt = ?
          WHERE id = ?`,
@@ -95,7 +95,7 @@ export const listsRepository = {
         id
       );
 
-      await db.runAsync(
+      await txn.runAsync(
         `UPDATE items
          SET deletedAt = ?, updatedAt = ?
          WHERE listId = ? AND deletedAt IS NULL`,

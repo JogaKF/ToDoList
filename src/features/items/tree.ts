@@ -2,11 +2,13 @@ import type { Item, ItemTreeNode } from './types';
 
 export function buildItemTree(items: Item[]) {
   const childrenByParent = new Map<string | null, Item[]>();
+  const presentIds = new Set(items.map((item) => item.id));
 
   for (const item of items) {
-    const bucket = childrenByParent.get(item.parentId) ?? [];
+    const normalizedParentId = item.parentId && presentIds.has(item.parentId) ? item.parentId : null;
+    const bucket = childrenByParent.get(normalizedParentId) ?? [];
     bucket.push(item);
-    childrenByParent.set(item.parentId, bucket);
+    childrenByParent.set(normalizedParentId, bucket);
   }
 
   for (const [, bucket] of childrenByParent) {

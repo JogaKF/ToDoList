@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Swipeable } from 'react-native-gesture-handler';
 import { useFocusEffect } from '@react-navigation/native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
@@ -70,7 +69,14 @@ export function ListDetailsScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      setSelectedItemId(null);
+      setTree([]);
       void loadData();
+
+      return () => {
+        setSelectedItemId(null);
+        setTree([]);
+      };
     }, [loadData])
   );
 
@@ -170,7 +176,7 @@ export function ListDetailsScreen() {
 
   const handleToggleMyDay = useCallback(
     async (item: ItemTreeNode) => {
-      if (item.myDayDate === todayKey()) {
+      if (item.myDayDate) {
         await itemsService.removeFromMyDay(db, item.id);
       } else {
         await itemsService.addToMyDay(db, item.id);
@@ -256,187 +262,158 @@ export function ListDetailsScreen() {
           const canShowChildren = !isShoppingList;
           const isInMyDay = item.myDayDate === todayKey();
 
-          const leftAction = !isShoppingList ? (
-            <Pressable
-              style={[styles.swipeAction, styles.swipeMyDayAction]}
-              onPress={() => void handleToggleMyDay(item)}
-            >
-              <Text style={styles.swipeActionIcon}>{isInMyDay ? '◐' : '☼'}</Text>
-              <Text style={styles.swipeActionText}>{isInMyDay ? 'Usun z dnia' : 'Do Mojego dnia'}</Text>
-            </Pressable>
-          ) : undefined;
-
-          const rightAction = (
-            <Pressable
-              style={[styles.swipeAction, styles.swipeDeleteAction]}
-              onPress={() => confirmDelete(item)}
-            >
-              <Text style={styles.swipeActionIconDanger}>⌫</Text>
-              <Text style={styles.swipeActionTextDanger}>Usun</Text>
-            </Pressable>
-          );
-
           return (
-            <Swipeable
+            <Pressable
               key={item.id}
-              renderLeftActions={leftAction ? () => leftAction : undefined}
-              renderRightActions={() => rightAction}
-              overshootLeft={false}
-              overshootRight={false}
-              leftThreshold={40}
-              rightThreshold={40}
+              onPress={() => setSelectedItemId((current) => (current === item.id ? null : item.id))}
+              style={[
+                styles.itemCard,
+                isSelected && styles.itemCardSelected,
+                {
+                  marginLeft: canShowChildren ? item.depth * 12 : 0,
+                  borderLeftWidth: canShowChildren && item.depth > 0 ? 2 : 0,
+                  borderLeftColor: canShowChildren && item.depth > 0 ? '#1D4D69' : 'transparent',
+                },
+              ]}
             >
-              <Pressable
-                onPress={() => setSelectedItemId((current) => (current === item.id ? null : item.id))}
-                style={[
-                  styles.itemCard,
-                  isSelected && styles.itemCardSelected,
-                  {
-                    marginLeft: canShowChildren ? item.depth * 12 : 0,
-                    borderLeftWidth: canShowChildren && item.depth > 0 ? 2 : 0,
-                    borderLeftColor: canShowChildren && item.depth > 0 ? '#1D4D69' : 'transparent',
-                  },
-                ]}
-              >
-                <View style={styles.itemTopRow}>
-                  {canShowChildren && item.hasChildren ? (
-                    <Pressable onPress={() => toggleExpanded(item.id)} style={styles.treeToggle}>
-                      <Text style={styles.treeToggleText}>{expandedIds[item.id] ? '⌄' : '›'}</Text>
-                    </Pressable>
-                  ) : (
-                    <View style={styles.treeSpacer} />
-                  )}
-
-                  <Pressable
-                    onPress={() => void handleToggleDone(item)}
-                    style={[
-                      styles.checkbox,
-                      item.status === 'done' && styles.checkboxDone,
-                    ]}
-                  >
-                    <Text style={styles.checkboxLabel}>{item.status === 'done' ? '✓' : ''}</Text>
+              <View style={styles.itemTopRow}>
+                {canShowChildren && item.hasChildren ? (
+                  <Pressable onPress={() => toggleExpanded(item.id)} style={styles.treeToggle}>
+                    <Text style={styles.treeToggleText}>{expandedIds[item.id] ? '⌄' : '›'}</Text>
                   </Pressable>
+                ) : (
+                  <View style={styles.treeSpacer} />
+                )}
 
-                  <View style={styles.itemContent}>
-                    {isEditing ? (
-                      <TextInput
-                        value={editingTitle}
-                        onChangeText={setEditingTitle}
-                        style={styles.input}
-                        placeholder="Nowy tytul"
-                        placeholderTextColor={ui.colors.textSoft}
+                <Pressable
+                  onPress={() => void handleToggleDone(item)}
+                  style={[
+                    styles.checkbox,
+                    item.status === 'done' && styles.checkboxDone,
+                  ]}
+                >
+                  <Text style={styles.checkboxLabel}>{item.status === 'done' ? '✓' : ''}</Text>
+                </Pressable>
+
+                <View style={styles.itemContent}>
+                  {isEditing ? (
+                    <TextInput
+                      value={editingTitle}
+                      onChangeText={setEditingTitle}
+                      style={styles.input}
+                      placeholder="Nowy tytul"
+                      placeholderTextColor={ui.colors.textSoft}
+                    />
+                  ) : (
+                    <>
+                      <Text style={[styles.itemTitle, item.status === 'done' && styles.itemDone]}>
+                        {item.title}
+                      </Text>
+                      <Text style={styles.itemMeta}>
+                        {isShoppingList
+                          ? item.status === 'done'
+                            ? 'Kupione'
+                            : 'Do kupienia'
+                          : isInMyDay
+                            ? `Moj dzien: ${item.myDayDate}`
+                            : 'Poza Moim dniem'}
+                      </Text>
+                      {!isShoppingList && item.parentId ? (
+                        <Text style={styles.itemHint}>Subtask</Text>
+                      ) : null}
+                    </>
+                  )}
+                </View>
+              </View>
+
+              {isSelected || isEditing ? (
+                <View style={styles.actionsRow}>
+                  <View style={styles.iconCluster}>
+                    <IconButton
+                      icon="arrow-up"
+                      onPress={() => void handleMoveItem(item, 'up')}
+                      disabled={isEditing}
+                    />
+                    <IconButton
+                      icon="arrow-down"
+                      onPress={() => void handleMoveItem(item, 'down')}
+                      disabled={isEditing}
+                    />
+                    {!isShoppingList ? (
+                      <IconButton
+                        icon={isInMyDay ? 'weather-sunset-down' : 'weather-sunny'}
+                        onPress={() => void handleToggleMyDay(item)}
+                        active={isInMyDay}
+                      />
+                    ) : null}
+                    {!isEditing ? (
+                      <IconButton
+                        icon="pencil-outline"
+                        onPress={() => {
+                          setEditingItemId(item.id);
+                          setEditingTitle(item.title);
+                        }}
                       />
                     ) : (
                       <>
-                        <Text style={[styles.itemTitle, item.status === 'done' && styles.itemDone]}>
-                          {item.title}
-                        </Text>
-                        <Text style={styles.itemMeta}>
-                          {isShoppingList
-                            ? item.status === 'done'
-                              ? 'Kupione'
-                              : 'Do kupienia'
-                            : isInMyDay
-                              ? `Moj dzien: ${item.myDayDate}`
-                              : 'Poza Moim dniem'}
-                        </Text>
-                        {!isShoppingList && item.parentId ? (
-                          <Text style={styles.itemHint}>Subtask</Text>
-                        ) : null}
-                      </>
-                    )}
-                  </View>
-                </View>
-
-                {isSelected || isEditing ? (
-                  <View style={styles.actionsRow}>
-                    <View style={styles.iconCluster}>
-                      <IconButton
-                        icon="arrow-up"
-                        onPress={() => void handleMoveItem(item, 'up')}
-                        disabled={isEditing}
-                      />
-                      <IconButton
-                        icon="arrow-down"
-                        onPress={() => void handleMoveItem(item, 'down')}
-                        disabled={isEditing}
-                      />
-                      {!isShoppingList ? (
                         <IconButton
-                          icon={isInMyDay ? 'weather-sunset-down' : 'weather-sunny'}
-                          onPress={() => void handleToggleMyDay(item)}
-                          active={isInMyDay}
+                          icon="check"
+                          tone="primary"
+                          onPress={() => void handleRename(item.id)}
                         />
-                      ) : null}
-                      {!isEditing ? (
                         <IconButton
-                          icon="pencil-outline"
+                          icon="close"
                           onPress={() => {
-                            setEditingItemId(item.id);
-                            setEditingTitle(item.title);
+                            setEditingItemId(null);
+                            setEditingTitle('');
+                            setSelectedItemId(null);
                           }}
                         />
-                      ) : (
-                        <>
-                          <IconButton
-                            icon="check"
-                            tone="primary"
-                            onPress={() => void handleRename(item.id)}
-                          />
-                          <IconButton
-                            icon="close"
-                            onPress={() => {
-                              setEditingItemId(null);
-                              setEditingTitle('');
-                              setSelectedItemId(null);
-                            }}
-                          />
-                        </>
-                      )}
-                      <IconButton
-                        icon="trash-can-outline"
-                        tone="danger"
-                        onPress={() => confirmDelete(item)}
-                      />
-                    </View>
-                  </View>
-                ) : null}
-
-                {canShowChildren ? (
-                  <View style={styles.childComposer}>
-                    {!isEditing && (isSelected || (draftChildren[item.id] ?? '').length > 0) ? (
-                      <>
-                        <TextInput
-                          value={draftChildren[item.id] ?? ''}
-                          onChangeText={(value) =>
-                            setDraftChildren((current) => ({
-                              ...current,
-                              [item.id]: value,
-                            }))
-                          }
-                          placeholder={item.parentId ? 'Dodaj kolejny poziom' : 'Dodaj subtask'}
-                          placeholderTextColor={ui.colors.textSoft}
-                          style={styles.input}
-                        />
-                        <View style={styles.subtaskActionsRow}>
-                          <PrimaryButton
-                            label={item.parentId ? 'Dodaj nizej' : 'Dodaj subtask'}
-                            leadingIcon="+"
-                            onPress={() => void handleCreateChildTask(item.id)}
-                          />
-                          {item.hasChildren ? (
-                            <IconButton
-                              icon={expandedIds[item.id] ? 'unfold-less-horizontal' : 'unfold-more-horizontal'}
-                              onPress={() => toggleExpanded(item.id)}
-                            />
-                          ) : null}
-                        </View>
                       </>
-                    ) : null}
+                    )}
+                    <IconButton
+                      icon="trash-can-outline"
+                      tone="danger"
+                      onPress={() => confirmDelete(item)}
+                    />
                   </View>
-                ) : null}
-              </Pressable>
-            </Swipeable>
+                </View>
+              ) : null}
+
+              {canShowChildren ? (
+                <View style={styles.childComposer}>
+                  {!isEditing && (isSelected || (draftChildren[item.id] ?? '').length > 0) ? (
+                    <>
+                      <TextInput
+                        value={draftChildren[item.id] ?? ''}
+                        onChangeText={(value) =>
+                          setDraftChildren((current) => ({
+                            ...current,
+                            [item.id]: value,
+                          }))
+                        }
+                        placeholder={item.parentId ? 'Dodaj kolejny poziom' : 'Dodaj subtask'}
+                        placeholderTextColor={ui.colors.textSoft}
+                        style={styles.input}
+                      />
+                      <View style={styles.subtaskActionsRow}>
+                        <PrimaryButton
+                          label={item.parentId ? 'Dodaj nizej' : 'Dodaj subtask'}
+                          leadingIcon="+"
+                          onPress={() => void handleCreateChildTask(item.id)}
+                        />
+                        {item.hasChildren ? (
+                          <IconButton
+                            icon={expandedIds[item.id] ? 'unfold-less-horizontal' : 'unfold-more-horizontal'}
+                            onPress={() => toggleExpanded(item.id)}
+                          />
+                        ) : null}
+                      </View>
+                    </>
+                  ) : null}
+                </View>
+              ) : null}
+            </Pressable>
           );
         })}
       </View>
@@ -606,48 +583,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-  },
-  swipeAction: {
-    minWidth: 108,
-    marginBottom: 12,
-    borderRadius: ui.radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-  },
-  swipeMyDayAction: {
-    backgroundColor: ui.colors.accent,
-    marginRight: 10,
-  },
-  swipeDeleteAction: {
-    backgroundColor: '#351722',
-    borderWidth: 1,
-    borderColor: ui.colors.danger,
-    marginLeft: 10,
-  },
-  swipeActionText: {
-    color: '#03111A',
-    fontSize: 11,
-    fontWeight: '800',
-    textAlign: 'center',
-    textTransform: 'uppercase',
-  },
-  swipeActionTextDanger: {
-    color: ui.colors.text,
-    fontSize: 11,
-    fontWeight: '800',
-    textAlign: 'center',
-    textTransform: 'uppercase',
-  },
-  swipeActionIcon: {
-    color: '#03111A',
-    fontSize: 22,
-    fontWeight: '800',
-  },
-  swipeActionIconDanger: {
-    color: ui.colors.text,
-    fontSize: 22,
-    fontWeight: '800',
   },
 });

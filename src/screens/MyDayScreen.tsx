@@ -1,26 +1,29 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useFocusEffect } from '@react-navigation/native';
 
-import { PrimaryButton } from '../components/common/PrimaryButton';
+import { IconButton } from '../components/common/IconButton';
 import { ScreenContainer } from '../components/common/ScreenContainer';
 import { useAppDatabase } from '../db/sqlite';
+import { buildItemTree, collectExpandableIds, flattenVisibleTree } from '../features/items/tree';
+import { useTreeUiStore } from '../features/items/useTreeUiStore';
 import { listsService } from '../features/lists/service';
 import { myDayService } from '../features/my-day/service';
-import type { Item } from '../features/items/types';
+import type { Item, ItemTreeNode } from '../features/items/types';
 import type { TodoList } from '../features/lists/types';
 import { ui } from '../theme/ui';
 import { todayKey } from '../utils/date';
 
 type GroupedItems = {
   list: TodoList | undefined;
-  items: Item[];
+  tree: ItemTreeNode[];
 };
 
 export function MyDayScreen() {
   const db = useAppDatabase();
   const tabBarHeight = useBottomTabBarHeight();
+  const { expandedIds, toggleExpanded, expandMany } = useTreeUiStore();
   const [items, setItems] = useState<Item[]>([]);
   const [lists, setLists] = useState<TodoList[]>([]);
 
@@ -55,9 +58,18 @@ export function MyDayScreen() {
 
     return Array.from(map.entries()).map(([listId, grouped]) => ({
       list: lists.find((list) => list.id === listId),
-      items: grouped.sort((a, b) => a.position - b.position || a.createdAt.localeCompare(b.createdAt)),
+      tree: buildItemTree(
+        grouped.sort((a, b) => a.position - b.position || a.createdAt.localeCompare(b.createdAt))
+      ),
     }));
   }, [items, lists]);
+
+  useEffect(() => {
+    const idsToExpand = groupedItems.flatMap((group) => collectExpandableIds(group.tree));
+    if (idsToExpand.length > 0) {
+      expandMany(idsToExpand);
+    }
+  }, [expandMany, groupedItems]);
 
   return (
     <ScreenContainer bottomInset={tabBarHeight + 16}>
@@ -81,10 +93,34 @@ export function MyDayScreen() {
       {groupedItems.map((group) => (
         <View key={group.list?.id ?? 'unknown'} style={styles.groupCard}>
           <Text style={styles.groupTitle}>{group.list?.name ?? 'Nieznana lista'}</Text>
-          {group.items.map((item) => (
-            <View key={item.id} style={styles.itemCard}>
+          {flattenVisibleTree(group.tree, expandedIds).map((item) => (
+            <View
+              key={item.id}
+              style={[
+                styles.itemCard,
+                {
+                  marginLeft: item.depth * 12,
+                  borderLeftWidth: item.depth > 0 ? 2 : 0,
+                  borderLeftColor: item.depth > 0 ? 'rgba(29, 77, 105, 0.65)' : 'transparent',
+                },
+              ]}
+            >
               <View style={styles.itemRow}>
-                <View style={[styles.statusDot, item.status === 'done' && styles.statusDone]} />
+                {item.hasChildren ? (
+                  <Pressable onPress={() => toggleExpanded(item.id)} style={styles.treeToggle}>
+                    <Text style={styles.treeToggleText}>{expandedIds[item.id] ? '⌄' : '›'}</Text>
+                  </Pressable>
+                ) : (
+                  <View style={styles.treeSpacer} />
+                )}
+                <Pressable
+                  onPress={() => {
+                    void myDayService.toggleDone(db, item).then(loadData);
+                  }}
+                  style={[styles.checkbox, item.status === 'done' && styles.checkboxDone]}
+                >
+                  <Text style={styles.checkboxLabel}>{item.status === 'done' ? '✓' : ''}</Text>
+                </Pressable>
                 <View style={styles.itemContent}>
                   <Text style={[styles.itemTitle, item.status === 'done' && styles.itemDone]}>
                     {item.title}
@@ -93,21 +129,12 @@ export function MyDayScreen() {
                     {item.parentId ? 'Subtask' : 'Glowny task'} | {item.status}
                   </Text>
                 </View>
-              </View>
-              <View style={styles.actionsRow}>
-                <PrimaryButton
-                  label={item.status === 'done' ? 'Oznacz jako otwarte' : 'Oznacz jako zrobione'}
-                  onPress={() => {
-                    void myDayService.toggleDone(db, item).then(loadData);
-                  }}
-                  tone="muted"
-                />
-                <PrimaryButton
-                  label="Usun z Mojego dnia"
+                <IconButton
+                  icon="weather-sunset-down"
+                  tone="danger"
                   onPress={() => {
                     void myDayService.removeFromDay(db, item.id).then(loadData);
                   }}
-                  tone="danger"
                 />
               </View>
             </View>
@@ -169,22 +196,44 @@ const styles = StyleSheet.create({
   },
   itemRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
     alignItems: 'flex-start',
   },
   itemCard: {
-    gap: 8,
-    paddingTop: 2,
+    paddingVertical: 8,
+    borderRadius: 14,
   },
-  statusDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 999,
-    backgroundColor: ui.colors.warning,
-    marginTop: 6,
+  treeToggle: {
+    width: 24,
+    height: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  statusDone: {
-    backgroundColor: ui.colors.accent,
+  treeToggleText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: ui.colors.primary,
+  },
+  treeSpacer: {
+    width: 24,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: ui.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  checkboxDone: {
+    backgroundColor: ui.colors.primaryStrong,
+  },
+  checkboxLabel: {
+    color: '#041018',
+    fontWeight: '800',
   },
   itemContent: {
     flex: 1,
@@ -202,10 +251,5 @@ const styles = StyleSheet.create({
   itemMeta: {
     color: ui.colors.textMuted,
     fontSize: 13,
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
   },
 });
