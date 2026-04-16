@@ -34,6 +34,22 @@ export const itemsService = {
     });
   },
 
+  async createShoppingItems(db: SQLiteDatabase, listId: string, rawValue: string) {
+    const titles = rawValue
+      .split(/\n|,|;/)
+      .map((part) => part.trim())
+      .filter(Boolean);
+
+    for (const title of titles) {
+      await itemsRepository.create(db, {
+        listId,
+        title,
+        parentId: null,
+        type: 'shopping',
+      });
+    }
+  },
+
   createSiblingTask(db: SQLiteDatabase, item: Item, title: string) {
     return itemsRepository.createSibling(db, item, title);
   },
@@ -60,6 +76,10 @@ export const itemsService = {
 
   remove(db: SQLiteDatabase, itemId: string) {
     return itemsRepository.softDelete(db, itemId);
+  },
+
+  removeMany(db: SQLiteDatabase, itemIds: string[]) {
+    return itemsRepository.softDeleteMany(db, itemIds);
   },
 
   addToMyDay(db: SQLiteDatabase, itemId: string, dateKey = todayKey()) {

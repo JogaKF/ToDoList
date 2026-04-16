@@ -224,6 +224,27 @@ export const itemsRepository = {
     });
   },
 
+  async softDeleteMany(db: SQLiteDatabase, ids: string[]) {
+    if (ids.length === 0) {
+      return;
+    }
+
+    const deletedAt = nowIso();
+
+    await db.withExclusiveTransactionAsync(async (txn) => {
+      for (const id of ids) {
+        await txn.runAsync(
+          `UPDATE items
+           SET deletedAt = ?, updatedAt = ?
+           WHERE id = ? AND deletedAt IS NULL`,
+          deletedAt,
+          deletedAt,
+          id
+        );
+      }
+    });
+  },
+
   async indentUnderPreviousSibling(db: SQLiteDatabase, item: Item) {
     const siblings = await db.getAllAsync<Pick<Item, 'id' | 'position'>>(
       `SELECT id, position

@@ -45,6 +45,14 @@ export function ListDetailsScreen() {
   const isShoppingList = list?.type === 'shopping';
 
   const visibleItems = useMemo(() => flattenVisibleTree(tree, expandedIds), [expandedIds, tree]);
+  const shoppingOpenItems = useMemo(
+    () => visibleItems.filter((item) => item.status === 'todo'),
+    [visibleItems]
+  );
+  const shoppingDoneItems = useMemo(
+    () => visibleItems.filter((item) => item.status === 'done'),
+    [visibleItems]
+  );
   const expandableIds = useMemo(() => collectExpandableIds(tree), [tree]);
   const listSummary = useMemo(() => {
     const doneItems = visibleItems.filter((item) => item.status === 'done').length;
@@ -98,7 +106,7 @@ export function ListDetailsScreen() {
     }
 
     if (list?.type === 'shopping') {
-      await itemsService.createShoppingItem(db, listId, nextTitle);
+      await itemsService.createShoppingItems(db, listId, nextTitle);
     } else {
       await itemsService.createTask(db, listId, nextTitle);
     }
@@ -246,6 +254,12 @@ export function ListDetailsScreen() {
     [db, loadData]
   );
 
+  const handleClearDoneShoppingItems = useCallback(async () => {
+    const doneIds = shoppingDoneItems.map((item) => item.id);
+    await itemsService.removeMany(db, doneIds);
+    await loadData();
+  }, [db, loadData, shoppingDoneItems]);
+
   const handleIndentItem = useCallback(
     async (item: ItemTreeNode) => {
       await itemsService.indentUnderPreviousSibling(db, item);
@@ -298,11 +312,11 @@ export function ListDetailsScreen() {
         <Text style={styles.inputHint}>
           {newTaskError ??
             (isShoppingList
-              ? 'Mozesz szybko budowac lokalna liste zakupow bez internetu.'
+              ? 'Wpisz wiele produktow naraz, oddzielajac je przecinkiem albo nowa linia.'
               : 'Tworz glowny task i potem rozwijaj go subtaskami.')}
         </Text>
         <PrimaryButton
-          label={isShoppingList ? 'Dodaj produkt' : 'Dodaj task'}
+          label={isShoppingList ? 'Dodaj produkty' : 'Dodaj task'}
           leadingIcon="+"
           disabled={!newTaskTitle.trim()}
           onPress={() => void handleCreateRootTask()}
@@ -324,6 +338,16 @@ export function ListDetailsScreen() {
         </View>
       ) : null}
 
+      {isShoppingList && shoppingDoneItems.length > 0 ? (
+        <View style={styles.toolbarRow}>
+          <PrimaryButton
+            label="Wyczysc kupione"
+            tone="danger"
+            onPress={() => void handleClearDoneShoppingItems()}
+          />
+        </View>
+      ) : null}
+
       <View style={styles.treeWrap}>
         {visibleItems.length === 0 ? (
           <View style={styles.emptyState}>
@@ -338,7 +362,7 @@ export function ListDetailsScreen() {
           </View>
         ) : null}
 
-        {visibleItems.map((item) => {
+        {(isShoppingList ? shoppingOpenItems : visibleItems).map((item) => {
           const isEditing = editingItemId === item.id;
           const isSelected = selectedItemId === item.id;
           const canShowChildren = !isShoppingList;
@@ -593,6 +617,99 @@ export function ListDetailsScreen() {
             </Pressable>
           );
         })}
+
+        {isShoppingList && shoppingDoneItems.length > 0 ? (
+          <View style={styles.doneSection}>
+            <Text style={styles.doneSectionTitle}>Kupione</Text>
+            {shoppingDoneItems.map((item) => {
+              const isEditing = editingItemId === item.id;
+              const isSelected = selectedItemId === item.id;
+              const isInMyDay = item.myDayDate === todayKey();
+
+              return (
+                <Pressable
+                  key={item.id}
+                  onPress={() => setSelectedItemId((current) => (current === item.id ? null : item.id))}
+                  style={[styles.itemCard, styles.itemCardDone, isSelected && styles.itemCardSelected]}
+                >
+                  <View style={styles.itemTopRow}>
+                    <View style={styles.treeSpacer} />
+                    <Pressable
+                      onPress={() => void handleToggleDone(item)}
+                      style={[styles.checkbox, styles.checkboxDone]}
+                    >
+                      <Text style={styles.checkboxLabel}>✓</Text>
+                    </Pressable>
+                    <View style={styles.itemContent}>
+                      {isEditing ? (
+                        <TextInput
+                          value={editingTitle}
+                          onChangeText={(value) => {
+                            setEditingTitle(value);
+                            if (value.trim()) {
+                              setEditingError(null);
+                            }
+                          }}
+                          style={styles.input}
+                          placeholder="Nowy tytul"
+                          placeholderTextColor={ui.colors.textSoft}
+                          autoFocus
+                          maxLength={120}
+                          returnKeyType="done"
+                          onSubmitEditing={() => void handleRename(item.id)}
+                        />
+                      ) : (
+                        <>
+                          <Text style={[styles.itemTitle, styles.itemDone]}>{item.title}</Text>
+                          <Text style={styles.itemMeta}>Kupione</Text>
+                        </>
+                      )}
+                    </View>
+                  </View>
+
+                  {isSelected || isEditing ? (
+                    <View style={styles.actionsRow}>
+                      <View style={styles.iconCluster}>
+                        {!isEditing ? (
+                          <IconButton
+                            icon="pencil-outline"
+                            onPress={() => {
+                              setEditingItemId(item.id);
+                              setEditingTitle(item.title);
+                              setEditingError(null);
+                            }}
+                          />
+                        ) : (
+                          <>
+                            <IconButton
+                              icon="check"
+                              tone="primary"
+                              onPress={() => void handleRename(item.id)}
+                            />
+                            <IconButton
+                              icon="close"
+                              onPress={() => {
+                                setEditingItemId(null);
+                                setEditingTitle('');
+                                setEditingError(null);
+                                setSelectedItemId(null);
+                              }}
+                            />
+                          </>
+                        )}
+                        <IconButton
+                          icon="trash-can-outline"
+                          tone="danger"
+                          onPress={() => confirmDelete(item)}
+                        />
+                      </View>
+                    </View>
+                  ) : null}
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
       </View>
     </ScreenContainer>
   );
@@ -692,6 +809,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#132D45',
     borderColor: '#2F7AA2',
   },
+  itemCardDone: {
+    opacity: 0.9,
+  },
   itemTopRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -776,6 +896,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
+  },
+  doneSection: {
+    gap: 12,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(25, 56, 82, 0.32)',
+  },
+  doneSectionTitle: {
+    color: ui.colors.textSoft,
+    fontSize: 13,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
 });
   const [siblingErrors, setSiblingErrors] = useState<Record<string, string>>({});
