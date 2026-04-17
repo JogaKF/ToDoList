@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Swipeable } from 'react-native-gesture-handler';
 
 import { IconButton } from '../components/common/IconButton';
 import { PrimaryButton } from '../components/common/PrimaryButton';
@@ -189,6 +190,7 @@ export function ListDetailsScreen() {
   const [newTaskError, setNewTaskError] = useState<string | null>(null);
   const [draftErrors, setDraftErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const swipeableRefs = useRef<Record<string, Swipeable | null>>({});
 
   const listId = route.params.listId;
   const isShoppingList = list?.type === 'shopping';
@@ -262,17 +264,25 @@ export function ListDetailsScreen() {
     setShoppingGroupMode(defaultShoppingGroupMode);
   }, [defaultShoppingGroupMode]);
 
+  const closeAllSwipeables = useCallback(() => {
+    Object.values(swipeableRefs.current).forEach((swipeable) => {
+      swipeable?.close();
+    });
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
+      closeAllSwipeables();
       setSelectedItemId(null);
       setTree([]);
       void loadData();
 
       return () => {
+        closeAllSwipeables();
         setSelectedItemId(null);
         setTree([]);
       };
-    }, [loadData])
+    }, [closeAllSwipeables, loadData])
   );
 
   useLayoutEffect(() => {
@@ -387,6 +397,7 @@ export function ListDetailsScreen() {
 
   const handleDelete = useCallback(
     async (item: ItemTreeNode) => {
+      closeAllSwipeables();
       await itemsService.remove(db, item.id);
       pushUndoAction({
         id: `delete-item-${item.id}-${Date.now()}`,
@@ -397,7 +408,7 @@ export function ListDetailsScreen() {
       });
       await loadData();
     },
-    [db, loadData, pushUndoAction]
+    [closeAllSwipeables, db, loadData, pushUndoAction]
   );
 
   const confirmDelete = useCallback(
@@ -427,6 +438,7 @@ export function ListDetailsScreen() {
 
   const handleToggleMyDay = useCallback(
     async (item: ItemTreeNode) => {
+      closeAllSwipeables();
       if (item.myDayDate) {
         await itemsService.removeFromMyDay(db, item.id);
       } else {
@@ -435,7 +447,7 @@ export function ListDetailsScreen() {
 
       await loadData();
     },
-    [db, loadData]
+    [closeAllSwipeables, db, loadData]
   );
 
   const handleSetMyDayDate = useCallback(
@@ -476,6 +488,47 @@ export function ListDetailsScreen() {
     [db, loadData]
   );
 
+  const handleSwipeAction = useCallback(
+    (item: ItemTreeNode, direction: 'left' | 'right') => {
+      closeAllSwipeables();
+
+      if (direction === 'right') {
+        confirmDelete(item);
+        return;
+      }
+
+      if (!isShoppingList) {
+        void handleToggleMyDay(item);
+      }
+    },
+    [closeAllSwipeables, confirmDelete, handleToggleMyDay, isShoppingList]
+  );
+
+  const renderSwipeSide = useCallback(
+    (direction: 'left' | 'right', item: ItemTreeNode) => {
+      const isDelete = direction === 'right';
+
+      if (!isDelete && isShoppingList) {
+        return <View style={styles.swipeSpacer} />;
+      }
+
+      const label = isDelete
+        ? 'Usun'
+        : item.myDayDate
+          ? 'Usun z dnia'
+          : 'Dodaj do dnia';
+      const containerStyle = isDelete ? styles.swipeDeleteAction : styles.swipeMyDayAction;
+      const labelStyle = isDelete ? styles.swipeDeleteText : styles.swipeMyDayText;
+
+      return (
+        <View style={[styles.swipeAction, containerStyle]}>
+          <Text style={labelStyle}>{label}</Text>
+        </View>
+      );
+    },
+    [isShoppingList]
+  );
+
   const renderItemCard = useCallback(
     (item: ItemTreeNode) => {
       const isSelected = selectedItemId === item.id;
@@ -484,7 +537,7 @@ export function ListDetailsScreen() {
       const tomorrowDateKey = dateKeyWithOffset(1);
       const isInMyDay = item.myDayDate === todayDateKey;
 
-      return (
+      const card = (
         <Pressable
           key={item.id}
           onPress={() => setSelectedItemId((current) => (current === item.id ? null : item.id))}
@@ -666,6 +719,27 @@ export function ListDetailsScreen() {
           ) : null}
         </Pressable>
       );
+
+      const canSwipeRight = !isShoppingList;
+
+      return (
+        <Swipeable
+          key={item.id}
+          ref={(instance) => {
+            swipeableRefs.current[item.id] = instance;
+          }}
+          overshootLeft={false}
+          overshootRight={false}
+          leftThreshold={72}
+          rightThreshold={72}
+          friction={2}
+          renderLeftActions={canSwipeRight ? () => renderSwipeSide('left', item) : undefined}
+          renderRightActions={() => renderSwipeSide('right', item)}
+          onSwipeableOpen={(direction) => handleSwipeAction(item, direction)}
+        >
+          {card}
+        </Swipeable>
+      );
     },
     [
       collapseMany,
@@ -678,10 +752,12 @@ export function ListDetailsScreen() {
       handleMoveItem,
       handleOutdentItem,
       handleSetMyDayDate,
+      handleSwipeAction,
       handleToggleDone,
       handleToggleMyDay,
       isShoppingList,
       navigation,
+      renderSwipeSide,
       selectedItemId,
       toggleExpanded,
     ]
@@ -1186,5 +1262,36 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 1,
+  },
+  swipeAction: {
+    minWidth: 120,
+    marginVertical: 2,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  swipeMyDayAction: {
+    backgroundColor: '#143D4A',
+    borderWidth: 1,
+    borderColor: 'rgba(74, 196, 255, 0.32)',
+  },
+  swipeDeleteAction: {
+    backgroundColor: '#471A27',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 114, 145, 0.34)',
+  },
+  swipeMyDayText: {
+    color: '#8BE4FF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  swipeDeleteText: {
+    color: '#FFB8C8',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  swipeSpacer: {
+    width: 12,
   },
 });
