@@ -3,7 +3,15 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { itemsRepository } from '../../db/repositories/itemsRepository';
 import { todayKey } from '../../utils/date';
 
-import type { Item, PlannedTask, RecurrenceConfig, RecurrenceType, RecurrenceUnit, SeriesEditScope } from './types';
+import type {
+  Item,
+  PlannedTask,
+  RecurrenceConfig,
+  RecurrenceType,
+  RecurrenceUnit,
+  SeriesEditScope,
+  ShoppingFavorite,
+} from './types';
 import { buildItemTree } from './tree';
 import { getUpcomingRecurringDates } from '../../utils/recurrence';
 
@@ -57,6 +65,30 @@ export const itemsService = {
 
   getDeleted(db: SQLiteDatabase) {
     return itemsRepository.getDeleted(db);
+  },
+
+  getShoppingCategories(db: SQLiteDatabase) {
+    return itemsRepository.getShoppingCategories(db);
+  },
+
+  addShoppingCategory(db: SQLiteDatabase, name: string) {
+    return itemsRepository.addShoppingCategory(db, name);
+  },
+
+  getShoppingFavorites(db: SQLiteDatabase) {
+    return itemsRepository.getShoppingFavorites(db);
+  },
+
+  getShoppingHistory(db: SQLiteDatabase, limit = 12) {
+    return itemsRepository.getShoppingHistory(db, limit);
+  },
+
+  saveShoppingFavorite(db: SQLiteDatabase, input: Pick<ShoppingFavorite, 'title' | 'category' | 'quantity' | 'unit'>) {
+    return itemsRepository.upsertShoppingFavorite(db, input);
+  },
+
+  removeShoppingFavorite(db: SQLiteDatabase, input: Pick<ShoppingFavorite, 'title' | 'category' | 'quantity' | 'unit'>) {
+    return itemsRepository.removeShoppingFavorite(db, input);
   },
 
   createTask(

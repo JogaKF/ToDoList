@@ -64,3 +64,28 @@ export type ItemActivity = {
   label: string;
   createdAt: string;
 };
+
+export type ShoppingFavorite = {
+  id: string;
+  title: string;
+  category: string | null;
+  quantity: string | null;
+  unit: string | null;
+  createdAt: string;
+  updatedAt: string;
+  lastUsedAt: string;
+};
+
+export type ShoppingHistoryEntry = {
+  title: string;
+  category: string | null;
+  quantity: string | null;
+  unit: string | null;
+  lastUsedAt: string;
+};
+
+export type ShoppingCategory = {
+  id: string;
+  name: string;
+  createdAt: string;
+};

@@ -166,6 +166,80 @@ export const listsRepository = {
     });
   },
 
+  async duplicateShoppingList(db: SQLiteDatabase, id: string, name?: string) {
+    const sourceList = await this.getById(db, id);
+    if (!sourceList || sourceList.type !== 'shopping') {
+      return null;
+    }
+
+    const timestamp = nowIso();
+    const position = await this.getNextPosition(db);
+    const duplicateId = createId('list');
+    const duplicateName = name?.trim() || `${sourceList.name} kopia`;
+
+    await db.withExclusiveTransactionAsync(async (txn) => {
+      await txn.runAsync(
+        `INSERT INTO lists (id, name, type, position, createdAt, updatedAt, deletedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        duplicateId,
+        duplicateName,
+        'shopping',
+        position,
+        timestamp,
+        timestamp,
+        null
+      );
+
+      const sourceItems = await txn.getAllAsync<{
+        id: string;
+        title: string;
+        category: string | null;
+        quantity: string | null;
+        unit: string | null;
+        status: string;
+        position: number;
+        createdAt: string;
+      }>(
+        `SELECT id, title, category, quantity, unit, status, position, createdAt
+         FROM items
+         WHERE listId = ? AND deletedAt IS NULL
+         ORDER BY position ASC, createdAt ASC`,
+        id
+      );
+
+      for (const sourceItem of sourceItems) {
+        await txn.runAsync(
+          `INSERT INTO items (
+            id, listId, parentId, type, title, category, quantity, unit, note, status, dueDate, recurrenceType, recurrenceConfig, recurrenceOriginId, previousRecurringItemId, recurrenceIsException, myDayDate, position, createdAt, updatedAt, deletedAt
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          createId('item'),
+          duplicateId,
+          null,
+          'shopping',
+          sourceItem.title,
+          sourceItem.category,
+          sourceItem.quantity,
+          sourceItem.unit,
+          null,
+          sourceItem.status,
+          null,
+          'none',
+          null,
+          null,
+          null,
+          0,
+          null,
+          sourceItem.position,
+          timestamp,
+          timestamp,
+          null
+        );
+      }
+    });
+
+    return duplicateId;
+  },
+
   async getNextPosition(db: SQLiteDatabase) {
     const row = await db.getFirstAsync<{ maxPosition: number | null }>(
       `SELECT MAX(position) as maxPosition

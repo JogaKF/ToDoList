@@ -13,7 +13,17 @@ import { useI18n } from '../app/providers/PreferencesProvider';
 import { useAppDatabase } from '../db/sqlite';
 import { itemsService } from '../features/items/service';
 import { listsService } from '../features/lists/service';
-import type { Item, ItemActivity, ItemRelations, RecurrenceType, RecurrenceUnit, SeriesEditScope } from '../features/items/types';
+import { IconButton } from '../components/common/IconButton';
+import type {
+  Item,
+  ItemActivity,
+  ItemRelations,
+  RecurrenceType,
+  RecurrenceUnit,
+  SeriesEditScope,
+  ShoppingCategory,
+  ShoppingFavorite,
+} from '../features/items/types';
 import type { TodoList } from '../features/lists/types';
 import { ui } from '../theme/ui';
 import { compareDateKeys, dateKeyWithOffset, formatDateLabel, todayKey } from '../utils/date';
@@ -48,7 +58,7 @@ const recurrenceLabels: Record<RecurrenceType, string> = {
   custom: 'Niestandardowo',
 };
 const shoppingQuickUnits = ['szt', 'kg', 'g', 'l', 'ml', 'opak'] as const;
-const shoppingCategories = ['Warzywa', 'Owoce', 'Nabial', 'Pieczywo', 'Mieso', 'Napoje', 'Chemia'] as const;
+const defaultShoppingCategories = ['Warzywa', 'Owoce', 'Nabial', 'Pieczywo', 'Mieso', 'Napoje', 'Chemia'] as const;
 
 function isValidDateKey(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
@@ -141,6 +151,9 @@ export function TaskPreviewScreen() {
   const [sourceList, setSourceList] = useState<TodoList | null>(null);
   const [relations, setRelations] = useState<ItemRelations>({ parent: null, children: [] });
   const [activity, setActivity] = useState<ItemActivity[]>([]);
+  const [shoppingCategories, setShoppingCategories] = useState<ShoppingCategory[]>([]);
+  const [shoppingFavorites, setShoppingFavorites] = useState<ShoppingFavorite[]>([]);
+  const [customCategoryName, setCustomCategoryName] = useState('');
   const [draft, setDraft] = useState<TaskEditorState>(buildEditorState());
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -162,10 +175,23 @@ export function TaskPreviewScreen() {
       setSourceList(nextList ?? null);
       setRelations(nextRelations);
       setActivity(nextActivity);
+      if (nextItem.type === 'shopping') {
+        const [nextCategories, nextFavorites] = await Promise.all([
+          itemsService.getShoppingCategories(db),
+          itemsService.getShoppingFavorites(db),
+        ]);
+        setShoppingCategories(nextCategories);
+        setShoppingFavorites(nextFavorites);
+      } else {
+        setShoppingCategories([]);
+        setShoppingFavorites([]);
+      }
     } else {
       setSourceList(null);
       setRelations({ parent: null, children: [] });
       setActivity([]);
+      setShoppingCategories([]);
+      setShoppingFavorites([]);
     }
     setIsLoading(false);
     setErrorMessage(null);
@@ -204,6 +230,25 @@ export function TaskPreviewScreen() {
   }, [item?.myDayDate]);
 
   const isTask = item?.type === 'task';
+  const allShoppingCategoryNames = useMemo(() => {
+    const merged = [...defaultShoppingCategories, ...shoppingCategories.map((category) => category.name)];
+    return Array.from(new Set(merged.map((name) => name.trim()).filter(Boolean)));
+  }, [shoppingCategories]);
+  const isFavoriteShoppingItem = useMemo(
+    () =>
+      Boolean(
+        item &&
+          item.type === 'shopping' &&
+          shoppingFavorites.some(
+            (favorite) =>
+              favorite.title.trim().toLowerCase() === item.title.trim().toLowerCase() &&
+              (favorite.category?.trim().toLowerCase() ?? '') === (item.category?.trim().toLowerCase() ?? '') &&
+              (favorite.quantity?.trim() ?? '') === (item.quantity?.trim() ?? '') &&
+              (favorite.unit?.trim() ?? '') === (item.unit?.trim() ?? '')
+          )
+      ),
+    [item, shoppingFavorites]
+  );
   const isRecurringOverdue = useMemo(
     () =>
       Boolean(
@@ -333,6 +378,46 @@ export function TaskPreviewScreen() {
     [db, item, loadItem]
   );
 
+  const handleAddCustomCategory = useCallback(async () => {
+    const nextName = customCategoryName.trim();
+    if (!nextName) {
+      return;
+    }
+
+    await itemsService.addShoppingCategory(db, nextName);
+    setDraft((current) => ({
+      ...current,
+      category: nextName,
+    }));
+    setCustomCategoryName('');
+    const nextCategories = await itemsService.getShoppingCategories(db);
+    setShoppingCategories(nextCategories);
+  }, [customCategoryName, db]);
+
+  const handleToggleShoppingFavorite = useCallback(async () => {
+    if (!item || item.type !== 'shopping') {
+      return;
+    }
+
+    const payload = {
+      title: draft.title.trim() || item.title,
+      category: draft.category || null,
+      quantity: draft.quantity || null,
+      unit: draft.unit || null,
+    };
+
+    if (isFavoriteShoppingItem) {
+      await itemsService.removeShoppingFavorite(db, payload);
+      setSaveMessage('Produkt usunieto z ulubionych.');
+    } else {
+      await itemsService.saveShoppingFavorite(db, payload);
+      setSaveMessage('Produkt dodano do ulubionych.');
+    }
+
+    const nextFavorites = await itemsService.getShoppingFavorites(db);
+    setShoppingFavorites(nextFavorites);
+  }, [db, draft.category, draft.quantity, draft.title, draft.unit, isFavoriteShoppingItem, item]);
+
   return (
     <ScreenContainer bottomInset={tabBarHeight + 16}>
       {isLoading ? (
@@ -352,7 +437,17 @@ export function TaskPreviewScreen() {
       {item ? (
         <>
           <View style={styles.hero}>
-            <Text style={styles.title}>{item.title}</Text>
+            <View style={styles.titleRow}>
+              <Text style={styles.title}>{item.title}</Text>
+              {item.type === 'shopping' ? (
+                <IconButton
+                  icon="star"
+                  onPress={() => void handleToggleShoppingFavorite()}
+                  active={isFavoriteShoppingItem}
+                  tone={isFavoriteShoppingItem ? 'primary' : 'muted'}
+                />
+              ) : null}
+            </View>
             <Text style={styles.meta}>
               {item.status === 'done' ? 'Zrobione' : 'Otwarte'} | {item.type === 'shopping' ? 'Zakupy' : 'Task'}
             </Text>
@@ -430,7 +525,7 @@ export function TaskPreviewScreen() {
               <>
                 <Text style={styles.detailLabel}>Kategoria</Text>
                 <View style={styles.actionsWrap}>
-                  {shoppingCategories.map((category) => (
+                  {allShoppingCategoryNames.map((category) => (
                     <PrimaryButton
                       key={`details-category-${category}`}
                       label={category}
@@ -443,6 +538,27 @@ export function TaskPreviewScreen() {
                       }
                     />
                   ))}
+                </View>
+                <View style={styles.row}>
+                  <View style={styles.fieldWrap}>
+                    <Text style={styles.detailLabel}>Nowa kategoria</Text>
+                    <TextInput
+                      value={customCategoryName}
+                      onChangeText={setCustomCategoryName}
+                      style={styles.input}
+                      placeholder="Dodaj wlasna kategorie"
+                      placeholderTextColor={ui.colors.textSoft}
+                    />
+                  </View>
+                  <View style={styles.fieldWrap}>
+                    <Text style={styles.detailLabel}>Akcja</Text>
+                    <PrimaryButton
+                      label="Dodaj kategorie"
+                      tone="muted"
+                      onPress={() => void handleAddCustomCategory()}
+                      disabled={!customCategoryName.trim()}
+                    />
+                  </View>
                 </View>
                 <View style={styles.row}>
                   <View style={styles.fieldWrap}>
@@ -766,10 +882,17 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingTop: 8,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
   title: {
     fontSize: 30,
     fontWeight: '800',
     color: ui.colors.text,
+    flex: 1,
   },
   meta: {
     color: ui.colors.textMuted,

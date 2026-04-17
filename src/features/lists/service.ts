@@ -42,4 +42,8 @@ export const listsService = {
   hardDeleteAllDeleted(db: SQLiteDatabase) {
     return listsRepository.hardDeleteAllDeleted(db);
   },
+
+  duplicateShoppingList(db: SQLiteDatabase, listId: string, name?: string) {
+    return listsRepository.duplicateShoppingList(db, listId, name);
+  },
 };

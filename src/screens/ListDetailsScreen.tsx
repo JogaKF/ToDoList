@@ -16,7 +16,14 @@ import { useI18n, usePreferences } from '../app/providers/PreferencesProvider';
 import { useAppDatabase } from '../db/sqlite';
 import { itemsService } from '../features/items/service';
 import { collectExpandableIds, flattenVisibleTree } from '../features/items/tree';
-import type { ItemTreeNode, RecurrenceType, RecurrenceUnit } from '../features/items/types';
+import type {
+  ItemTreeNode,
+  RecurrenceType,
+  RecurrenceUnit,
+  ShoppingCategory,
+  ShoppingFavorite,
+  ShoppingHistoryEntry,
+} from '../features/items/types';
 import { useTreeUiStore } from '../features/items/useTreeUiStore';
 import { listsService } from '../features/lists/service';
 import type { TodoList } from '../features/lists/types';
@@ -45,7 +52,7 @@ const recurrenceLabels: Record<RecurrenceType, string> = {
   custom: 'Niestandardowo',
 };
 const shoppingQuickUnits = ['szt', 'kg', 'g', 'l', 'ml', 'opak'] as const;
-const shoppingCategories = [
+const defaultShoppingCategories = [
   'Warzywa',
   'Owoce',
   'Nabial',
@@ -177,6 +184,7 @@ export function ListDetailsScreen() {
   const [tree, setTree] = useState<ItemTreeNode[]>([]);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [composerCategory, setComposerCategory] = useState('');
+  const [customCategoryName, setCustomCategoryName] = useState('');
   const [composerQuantity, setComposerQuantity] = useState('');
   const [composerUnit, setComposerUnit] = useState('');
   const [composerNote, setComposerNote] = useState('');
@@ -192,6 +200,9 @@ export function ListDetailsScreen() {
   const [newTaskError, setNewTaskError] = useState<string | null>(null);
   const [draftErrors, setDraftErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [shoppingCategories, setShoppingCategories] = useState<ShoppingCategory[]>([]);
+  const [shoppingFavorites, setShoppingFavorites] = useState<ShoppingFavorite[]>([]);
+  const [shoppingHistory, setShoppingHistory] = useState<ShoppingHistoryEntry[]>([]);
   const swipeableRefs = useRef<Record<string, Swipeable | null>>({});
 
   const listId = route.params.listId;
@@ -241,16 +252,26 @@ export function ListDetailsScreen() {
       openItems,
     };
   }, [visibleItems]);
+  const allShoppingCategoryNames = useMemo(() => {
+    const merged = [...defaultShoppingCategories, ...shoppingCategories.map((category) => category.name)];
+    return Array.from(new Set(merged.map((name) => name.trim()).filter(Boolean)));
+  }, [shoppingCategories]);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
-    const [nextList, nextTree] = await Promise.all([
+    const [nextList, nextTree, nextCategories, nextFavorites, nextHistory] = await Promise.all([
       listsService.getById(db, listId),
       itemsService.getListTree(db, listId),
+      itemsService.getShoppingCategories(db),
+      itemsService.getShoppingFavorites(db),
+      itemsService.getShoppingHistory(db),
     ]);
 
     setList(nextList ?? null);
     setTree(nextTree);
+    setShoppingCategories(nextCategories);
+    setShoppingFavorites(nextFavorites);
+    setShoppingHistory(nextHistory);
     setIsLoading(false);
   }, [db, listId]);
 
@@ -292,6 +313,66 @@ export function ListDetailsScreen() {
       title: list?.name ?? 'Lista',
     });
   }, [list?.name, navigation]);
+
+  const isFavoriteShoppingEntry = useCallback(
+    (input: Pick<ShoppingFavorite, 'title' | 'category' | 'quantity' | 'unit'>) =>
+      shoppingFavorites.some(
+        (favorite) =>
+          favorite.title.trim().toLowerCase() === input.title.trim().toLowerCase() &&
+          (favorite.category?.trim().toLowerCase() ?? '') === (input.category?.trim().toLowerCase() ?? '') &&
+          (favorite.quantity?.trim() ?? '') === (input.quantity?.trim() ?? '') &&
+          (favorite.unit?.trim() ?? '') === (input.unit?.trim() ?? '')
+      ),
+    [shoppingFavorites]
+  );
+
+  const handleAddCustomCategory = useCallback(async () => {
+    const nextName = customCategoryName.trim();
+    if (!nextName) {
+      return;
+    }
+
+    await itemsService.addShoppingCategory(db, nextName);
+    setComposerCategory(nextName);
+    setCustomCategoryName('');
+    await loadData();
+  }, [customCategoryName, db, loadData]);
+
+  const handleCreateFromShoppingTemplate = useCallback(
+    async (template: Pick<ShoppingHistoryEntry, 'title' | 'category' | 'quantity' | 'unit'>) => {
+      await itemsService.createShoppingItem(db, listId, template.title, {
+        category: template.category,
+        quantity: template.quantity,
+        unit: template.unit,
+      });
+      await loadData();
+    },
+    [db, listId, loadData]
+  );
+
+  const handleToggleFavorite = useCallback(
+    async (input: Pick<ShoppingFavorite, 'title' | 'category' | 'quantity' | 'unit'>) => {
+      if (isFavoriteShoppingEntry(input)) {
+        await itemsService.removeShoppingFavorite(db, input);
+      } else {
+        await itemsService.saveShoppingFavorite(db, input);
+      }
+
+      await loadData();
+    },
+    [db, isFavoriteShoppingEntry, loadData]
+  );
+
+  const handleDuplicateShoppingList = useCallback(async () => {
+    if (!list || list.type !== 'shopping') {
+      return;
+    }
+
+    const duplicatedListId = await listsService.duplicateShoppingList(db, list.id);
+    if (duplicatedListId) {
+      navigation.navigate('ListDetails', { listId: duplicatedListId });
+    }
+  }, [db, list, navigation]);
 
   const handleCreateRootTask = useCallback(async () => {
     const nextTitle = newTaskTitle.trim();
@@ -538,6 +619,14 @@ export function ListDetailsScreen() {
       const todayDateKey = todayKey();
       const tomorrowDateKey = dateKeyWithOffset(1);
       const isInMyDay = item.myDayDate === todayDateKey;
+      const isFavoriteShoppingItem = isShoppingList
+        ? isFavoriteShoppingEntry({
+            title: item.title,
+            category: item.category,
+            quantity: item.quantity,
+            unit: item.unit,
+          })
+        : false;
 
       const card = (
         <Pressable
@@ -638,6 +727,21 @@ export function ListDetailsScreen() {
                     icon={isInMyDay ? 'weather-sunset-down' : 'weather-sunny'}
                     onPress={() => void handleToggleMyDay(item)}
                     active={isInMyDay}
+                  />
+                ) : null}
+                {isShoppingList ? (
+                  <IconButton
+                    icon="star"
+                    onPress={() =>
+                      void handleToggleFavorite({
+                        title: item.title,
+                        category: item.category,
+                        quantity: item.quantity,
+                        unit: item.unit,
+                      })
+                    }
+                    active={isFavoriteShoppingItem}
+                    tone={isFavoriteShoppingItem ? 'primary' : 'muted'}
                   />
                 ) : null}
                 <IconButton
@@ -755,8 +859,10 @@ export function ListDetailsScreen() {
       handleOutdentItem,
       handleSetMyDayDate,
       handleSwipeAction,
+      handleToggleFavorite,
       handleToggleDone,
       handleToggleMyDay,
+      isFavoriteShoppingEntry,
       isShoppingList,
       navigation,
       renderSwipeSide,
@@ -817,7 +923,7 @@ export function ListDetailsScreen() {
         </Text>
         {isShoppingList ? (
           <View style={styles.scheduleRow}>
-            {shoppingCategories.map((category) => (
+            {allShoppingCategoryNames.map((category) => (
               <PrimaryButton
                 key={`composer-category-${category}`}
                 label={category}
@@ -825,6 +931,23 @@ export function ListDetailsScreen() {
                 onPress={() => setComposerCategory((current) => (current === category ? '' : category))}
               />
             ))}
+          </View>
+        ) : null}
+        {isShoppingList ? (
+          <View style={styles.scheduleRow}>
+            <TextInput
+              value={customCategoryName}
+              onChangeText={setCustomCategoryName}
+              style={[styles.input, styles.shoppingMetaInput]}
+              placeholder="Nowa kategoria"
+              placeholderTextColor={ui.colors.textSoft}
+            />
+            <PrimaryButton
+              label="Dodaj kategorie"
+              tone="muted"
+              onPress={() => void handleAddCustomCategory()}
+              disabled={!customCategoryName.trim()}
+            />
           </View>
         ) : null}
         {isShoppingList ? (
@@ -942,6 +1065,46 @@ export function ListDetailsScreen() {
             ) : null}
           </>
         ) : null}
+
+        {isShoppingList && shoppingFavorites.length > 0 ? (
+          <View style={styles.shoppingSupportSection}>
+            <Text style={styles.supportTitle}>Ulubione produkty</Text>
+            <View style={styles.supportGrid}>
+              {shoppingFavorites.slice(0, 8).map((favorite) => (
+                <Pressable
+                  key={favorite.id}
+                  onPress={() => void handleCreateFromShoppingTemplate(favorite)}
+                  style={styles.supportCard}
+                >
+                  <Text style={styles.supportCardTitle}>{favorite.title}</Text>
+                  <Text style={styles.supportCardMeta}>
+                    {[favorite.category, favorite.quantity, favorite.unit].filter(Boolean).join(' • ') || 'Szybkie dodanie'}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        ) : null}
+
+        {isShoppingList && shoppingHistory.length > 0 ? (
+          <View style={styles.shoppingSupportSection}>
+            <Text style={styles.supportTitle}>Dodaj z historii</Text>
+            <View style={styles.supportGrid}>
+              {shoppingHistory.slice(0, 10).map((entry, index) => (
+                <Pressable
+                  key={`${entry.title}-${entry.category ?? 'none'}-${index}`}
+                  onPress={() => void handleCreateFromShoppingTemplate(entry)}
+                  style={styles.supportCard}
+                >
+                  <Text style={styles.supportCardTitle}>{entry.title}</Text>
+                  <Text style={styles.supportCardMeta}>
+                    {[entry.category, entry.quantity, entry.unit].filter(Boolean).join(' • ') || 'Historia'}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        ) : null}
       </View>
 
       {!isShoppingList && expandableIds.length > 0 ? (
@@ -985,6 +1148,11 @@ export function ListDetailsScreen() {
             label="Grupuj jednostki"
             tone={shoppingGroupMode === 'unit' ? 'primary' : 'muted'}
             onPress={() => setShoppingGroupMode('unit')}
+          />
+          <PrimaryButton
+            label="Kopiuj liste"
+            tone="muted"
+            onPress={() => void handleDuplicateShoppingList()}
           />
           {shoppingDoneItems.length > 0 ? (
           <PrimaryButton
@@ -1103,6 +1271,36 @@ const styles = StyleSheet.create({
     color: ui.colors.textMuted,
     fontSize: 12,
     lineHeight: 18,
+  },
+  shoppingSupportSection: {
+    gap: 8,
+  },
+  supportTitle: {
+    color: ui.colors.textSoft,
+    fontSize: 13,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  supportGrid: {
+    gap: 8,
+  },
+  supportCard: {
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: 'rgba(9, 18, 29, 0.72)',
+    borderWidth: 1,
+    borderColor: 'rgba(25, 56, 82, 0.28)',
+    gap: 4,
+  },
+  supportCardTitle: {
+    color: ui.colors.text,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  supportCardMeta: {
+    color: ui.colors.textMuted,
+    fontSize: 12,
   },
   treeWrap: {
     gap: 12,
