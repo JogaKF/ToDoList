@@ -140,6 +140,14 @@ export function ListDetailsScreen() {
   const isShoppingList = list?.type === 'shopping';
 
   const visibleItems = useMemo(() => flattenVisibleTree(tree, expandedIds), [expandedIds, tree]);
+  const taskOpenItems = useMemo(
+    () => visibleItems.filter((item) => item.status === 'todo'),
+    [visibleItems]
+  );
+  const taskDoneItems = useMemo(
+    () => visibleItems.filter((item) => item.status === 'done'),
+    [visibleItems]
+  );
   const shoppingOpenItems = useMemo(
     () => visibleItems.filter((item) => item.status === 'todo'),
     [visibleItems]
@@ -398,6 +406,416 @@ export function ListDetailsScreen() {
     [db, loadData]
   );
 
+  const renderItemCard = useCallback(
+    (item: ItemTreeNode) => {
+      const isEditing = editingItemId === item.id;
+      const isSelected = selectedItemId === item.id;
+      const canShowChildren = !isShoppingList;
+      const todayDateKey = todayKey();
+      const tomorrowDateKey = dateKeyWithOffset(1);
+      const isInMyDay = item.myDayDate === todayDateKey;
+
+      return (
+        <Pressable
+          key={item.id}
+          onPress={() => setSelectedItemId((current) => (current === item.id ? null : item.id))}
+          style={[
+            styles.itemCard,
+            isSelected && styles.itemCardSelected,
+            {
+              marginLeft: canShowChildren ? item.depth * 12 : 0,
+              borderLeftWidth: canShowChildren && item.depth > 0 ? 2 : 0,
+              borderLeftColor: canShowChildren && item.depth > 0 ? '#1D4D69' : 'transparent',
+            },
+          ]}
+        >
+          <View style={styles.itemTopRow}>
+            {canShowChildren && item.hasChildren ? (
+              <Pressable onPress={() => toggleExpanded(item.id)} style={styles.treeToggle}>
+                <Text style={styles.treeToggleText}>{expandedIds[item.id] ? '⌄' : '›'}</Text>
+              </Pressable>
+            ) : (
+              <View style={styles.treeSpacer} />
+            )}
+
+            <Pressable
+              onPress={() => void handleToggleDone(item)}
+              style={[styles.checkbox, item.status === 'done' && styles.checkboxDone]}
+            >
+              <Text style={styles.checkboxLabel}>{item.status === 'done' ? '✓' : ''}</Text>
+            </Pressable>
+
+            <View style={styles.itemContent}>
+              {isEditing ? (
+                <TextInput
+                  value={editingDraft.title}
+                  onChangeText={(value) => {
+                    setEditingDraft((current) => ({
+                      ...current,
+                      title: value,
+                    }));
+                    if (value.trim()) {
+                      setEditingError(null);
+                    }
+                  }}
+                  style={styles.input}
+                  placeholder="Nowy tytul"
+                  placeholderTextColor={ui.colors.textSoft}
+                  autoFocus
+                  maxLength={120}
+                  returnKeyType="done"
+                  onSubmitEditing={() => void handleRename(item.id)}
+                />
+              ) : (
+                <>
+                  <Text style={[styles.itemTitle, item.status === 'done' && styles.itemDone]}>
+                    {item.title}
+                  </Text>
+                  <Text style={styles.itemMeta}>
+                    {isShoppingList
+                      ? `${item.status === 'done' ? 'Kupione' : 'Do kupienia'}${
+                          item.quantity || item.unit
+                            ? ` • ${item.quantity ?? ''}${item.quantity && item.unit ? ' ' : ''}${item.unit ?? ''}`
+                            : ''
+                        }`
+                      : isInMyDay
+                        ? `Moj dzien: ${item.myDayDate}`
+                        : 'Poza Moim dniem'}
+                  </Text>
+                  {item.dueDate ? (
+                    <Text style={styles.itemMeta}>
+                      Termin: {isValidDateKey(item.dueDate) ? formatDateLabel(item.dueDate) : item.dueDate}
+                    </Text>
+                  ) : null}
+                  {getRecurrenceSummary(item) ? (
+                    <Text style={styles.itemMeta}>{getRecurrenceSummary(item)}</Text>
+                  ) : null}
+                  {item.note ? (
+                    <Text style={styles.itemNote} numberOfLines={2}>
+                      {item.note}
+                    </Text>
+                  ) : null}
+                  {!isShoppingList && item.parentId ? (
+                    <Text style={styles.itemHint}>Subtask</Text>
+                  ) : null}
+                </>
+              )}
+            </View>
+
+            {isShoppingList && formatShoppingAmount(item) ? (
+              <View style={styles.shoppingAmountBadge}>
+                <Text style={styles.shoppingAmountText}>{formatShoppingAmount(item)}</Text>
+              </View>
+            ) : null}
+          </View>
+
+          {isSelected || isEditing ? (
+            <View style={styles.actionsRow}>
+              {isEditing ? (
+                <Text style={styles.inputHintInline}>
+                  {editingError ?? 'Enter lub ikona potwierdzenia zapisze zmiane.'}
+                </Text>
+              ) : null}
+              <View style={styles.iconCluster}>
+                <IconButton
+                  icon="arrow-up"
+                  onPress={() => void handleMoveItem(item, 'up')}
+                  disabled={isEditing}
+                />
+                <IconButton
+                  icon="arrow-down"
+                  onPress={() => void handleMoveItem(item, 'down')}
+                  disabled={isEditing}
+                />
+                {!isShoppingList ? (
+                  <>
+                    <IconButton
+                      icon="indent"
+                      onPress={() => void handleIndentItem(item)}
+                      disabled={isEditing}
+                    />
+                    <IconButton
+                      icon="outdent"
+                      onPress={() => void handleOutdentItem(item)}
+                      disabled={isEditing || !item.parentId}
+                    />
+                  </>
+                ) : null}
+                {!isShoppingList ? (
+                  <IconButton
+                    icon={isInMyDay ? 'weather-sunset-down' : 'weather-sunny'}
+                    onPress={() => void handleToggleMyDay(item)}
+                    active={isInMyDay}
+                  />
+                ) : null}
+                <IconButton
+                  icon="magnify"
+                  onPress={() => navigation.navigate('TaskPreview', { itemId: item.id })}
+                />
+                {!isEditing ? (
+                  <IconButton
+                    icon="pencil-outline"
+                    onPress={() => {
+                      setEditingItemId(item.id);
+                      setEditingDraft(buildEditorState(item));
+                      setEditingError(null);
+                    }}
+                  />
+                ) : (
+                  <>
+                    <IconButton
+                      icon="check"
+                      tone="primary"
+                      onPress={() => void handleRename(item.id)}
+                    />
+                    <IconButton
+                      icon="close"
+                      onPress={() => {
+                        setEditingItemId(null);
+                        setEditingDraft(buildEditorState());
+                        setEditingError(null);
+                        setSelectedItemId(null);
+                      }}
+                    />
+                  </>
+                )}
+                <IconButton
+                  icon="trash-can-outline"
+                  tone="danger"
+                  onPress={() => confirmDelete(item)}
+                />
+              </View>
+              {!isEditing && !isShoppingList ? (
+                <View style={styles.scheduleRow}>
+                  <PrimaryButton
+                    label={`Dzis ${formatDateLabel(todayDateKey)}`}
+                    tone={item.myDayDate === todayDateKey ? 'primary' : 'muted'}
+                    onPress={() => void handleSetMyDayDate(item, todayDateKey)}
+                  />
+                  <PrimaryButton
+                    label={`Jutro ${formatDateLabel(tomorrowDateKey)}`}
+                    tone={item.myDayDate === tomorrowDateKey ? 'primary' : 'muted'}
+                    onPress={() => void handleSetMyDayDate(item, tomorrowDateKey)}
+                  />
+                </View>
+              ) : null}
+              {isEditing && !isShoppingList ? (
+                <View style={styles.detailsEditor}>
+                  <TextInput
+                    value={editingDraft.note}
+                    onChangeText={(value) =>
+                      setEditingDraft((current) => ({
+                        ...current,
+                        note: value,
+                      }))
+                    }
+                    style={[styles.input, styles.noteInput]}
+                    placeholder="Notatka do zadania"
+                    placeholderTextColor={ui.colors.textSoft}
+                    multiline
+                    textAlignVertical="top"
+                  />
+                  <TextInput
+                    value={editingDraft.dueDate}
+                    onChangeText={(value) =>
+                      setEditingDraft((current) => ({
+                        ...current,
+                        dueDate: value,
+                      }))
+                    }
+                    style={styles.input}
+                    placeholder="Termin YYYY-MM-DD"
+                    placeholderTextColor={ui.colors.textSoft}
+                    autoCapitalize="none"
+                  />
+                  <View style={styles.scheduleRow}>
+                    <PrimaryButton
+                      label="Dzisiaj"
+                      tone={editingDraft.dueDate === todayDateKey ? 'primary' : 'muted'}
+                      onPress={() =>
+                        setEditingDraft((current) => ({
+                          ...current,
+                          dueDate: todayDateKey,
+                        }))
+                      }
+                    />
+                    <PrimaryButton
+                      label="Jutro"
+                      tone={editingDraft.dueDate === tomorrowDateKey ? 'primary' : 'muted'}
+                      onPress={() =>
+                        setEditingDraft((current) => ({
+                          ...current,
+                          dueDate: tomorrowDateKey,
+                        }))
+                      }
+                    />
+                    <PrimaryButton
+                      label="Bez daty"
+                      tone={!editingDraft.dueDate ? 'primary' : 'muted'}
+                      onPress={() =>
+                        setEditingDraft((current) => ({
+                          ...current,
+                          dueDate: '',
+                        }))
+                      }
+                    />
+                  </View>
+                  <View style={styles.scheduleRow}>
+                    {recurrenceOptions.map((option) => (
+                      <PrimaryButton
+                        key={`${item.id}-${option}`}
+                        label={recurrenceLabels[option]}
+                        tone={editingDraft.recurrenceType === option ? 'primary' : 'muted'}
+                        onPress={() =>
+                          setEditingDraft((current) => ({
+                            ...current,
+                            recurrenceType: option,
+                          }))
+                        }
+                      />
+                    ))}
+                  </View>
+                  {editingDraft.recurrenceType === 'custom' ? (
+                    <View style={styles.scheduleRow}>
+                      <TextInput
+                        value={editingDraft.recurrenceInterval}
+                        onChangeText={(value) =>
+                          setEditingDraft((current) => ({
+                            ...current,
+                            recurrenceInterval: value.replace(/[^0-9]/g, ''),
+                          }))
+                        }
+                        style={[styles.input, styles.intervalInput]}
+                        placeholder="Interwal"
+                        placeholderTextColor={ui.colors.textSoft}
+                        keyboardType="number-pad"
+                      />
+                      {(['days', 'weeks', 'months'] as RecurrenceUnit[]).map((unit) => (
+                        <PrimaryButton
+                          key={`${item.id}-${unit}`}
+                          label={unit === 'days' ? 'Dni' : unit === 'weeks' ? 'Tygodnie' : 'Miesiace'}
+                          tone={editingDraft.recurrenceUnit === unit ? 'primary' : 'muted'}
+                          onPress={() =>
+                            setEditingDraft((current) => ({
+                              ...current,
+                              recurrenceUnit: unit,
+                            }))
+                          }
+                        />
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+              {isEditing && isShoppingList ? (
+                <View style={styles.detailsEditor}>
+                  <View style={styles.scheduleRow}>
+                    <TextInput
+                      value={editingDraft.quantity}
+                      onChangeText={(value) =>
+                        setEditingDraft((current) => ({
+                          ...current,
+                          quantity: value,
+                        }))
+                      }
+                      style={[styles.input, styles.shoppingMetaInput]}
+                      placeholder="Ilosc"
+                      placeholderTextColor={ui.colors.textSoft}
+                    />
+                    <TextInput
+                      value={editingDraft.unit}
+                      onChangeText={(value) =>
+                        setEditingDraft((current) => ({
+                          ...current,
+                          unit: value,
+                        }))
+                      }
+                      style={[styles.input, styles.shoppingMetaInput]}
+                      placeholder="Jednostka"
+                      placeholderTextColor={ui.colors.textSoft}
+                    />
+                  </View>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          {canShowChildren ? (
+            <View style={styles.childComposer}>
+              {!isEditing && (isSelected || (draftChildren[item.id] ?? '').length > 0) ? (
+                <>
+                  <TextInput
+                    value={draftChildren[item.id] ?? ''}
+                    onChangeText={(value) => {
+                      setDraftChildren((current) => ({
+                        ...current,
+                        [item.id]: value,
+                      }));
+                      if (value.trim()) {
+                        setDraftErrors((current) => ({
+                          ...current,
+                          [item.id]: '',
+                        }));
+                      }
+                    }}
+                    placeholder={item.parentId ? 'Dodaj kolejny poziom' : 'Dodaj subtask'}
+                    placeholderTextColor={ui.colors.textSoft}
+                    style={styles.input}
+                    maxLength={120}
+                    returnKeyType="done"
+                    onSubmitEditing={() => void handleCreateChildTask(item.id)}
+                  />
+                  <Text style={styles.inputHintInline}>
+                    {draftErrors[item.id] ||
+                      (item.parentId
+                        ? 'Nowy poziom zapisze sie lokalnie pod tym elementem.'
+                        : 'Subtask pojawi sie od razu pod wybranym taskiem.')}
+                  </Text>
+                  <View style={styles.subtaskActionsRow}>
+                    <PrimaryButton
+                      label={item.parentId ? 'Dodaj nizej' : 'Dodaj subtask'}
+                      leadingIcon="+"
+                      onPress={() => void handleCreateChildTask(item.id)}
+                    />
+                    {item.hasChildren ? (
+                      <IconButton
+                        icon={expandedIds[item.id] ? 'unfold-less-horizontal' : 'unfold-more-horizontal'}
+                        onPress={() => toggleExpanded(item.id)}
+                      />
+                    ) : null}
+                  </View>
+                </>
+              ) : null}
+            </View>
+          ) : null}
+        </Pressable>
+      );
+    },
+    [
+      collapseMany,
+      db,
+      draftChildren,
+      draftErrors,
+      editingDraft,
+      editingError,
+      editingItemId,
+      expandedIds,
+      handleCreateChildTask,
+      handleDelete,
+      handleIndentItem,
+      handleMoveItem,
+      handleOutdentItem,
+      handleRename,
+      handleSetMyDayDate,
+      handleToggleDone,
+      handleToggleMyDay,
+      isShoppingList,
+      navigation,
+      selectedItemId,
+      toggleExpanded,
+    ]
+  );
+
   return (
     <ScreenContainer>
       <View style={styles.headerCard}>
@@ -586,507 +1004,19 @@ export function ListDetailsScreen() {
           />
         ) : null}
 
-        {(isShoppingList ? shoppingOpenItems : visibleItems).map((item) => {
-          const isEditing = editingItemId === item.id;
-          const isSelected = selectedItemId === item.id;
-          const canShowChildren = !isShoppingList;
-          const todayDateKey = todayKey();
-          const tomorrowDateKey = dateKeyWithOffset(1);
-          const isInMyDay = item.myDayDate === todayDateKey;
+        {(isShoppingList ? shoppingOpenItems : taskOpenItems).map(renderItemCard)}
 
-          return (
-            <Pressable
-              key={item.id}
-              onPress={() => setSelectedItemId((current) => (current === item.id ? null : item.id))}
-              style={[
-                styles.itemCard,
-                isSelected && styles.itemCardSelected,
-                {
-                  marginLeft: canShowChildren ? item.depth * 12 : 0,
-                  borderLeftWidth: canShowChildren && item.depth > 0 ? 2 : 0,
-                  borderLeftColor: canShowChildren && item.depth > 0 ? '#1D4D69' : 'transparent',
-                },
-              ]}
-            >
-              <View style={styles.itemTopRow}>
-                {canShowChildren && item.hasChildren ? (
-                  <Pressable onPress={() => toggleExpanded(item.id)} style={styles.treeToggle}>
-                    <Text style={styles.treeToggleText}>{expandedIds[item.id] ? '⌄' : '›'}</Text>
-                  </Pressable>
-                ) : (
-                  <View style={styles.treeSpacer} />
-                )}
-
-                <Pressable
-                  onPress={() => void handleToggleDone(item)}
-                  style={[
-                    styles.checkbox,
-                    item.status === 'done' && styles.checkboxDone,
-                  ]}
-                >
-                  <Text style={styles.checkboxLabel}>{item.status === 'done' ? '✓' : ''}</Text>
-                </Pressable>
-
-                <View style={styles.itemContent}>
-                  {isEditing ? (
-                    <TextInput
-                      value={editingDraft.title}
-                      onChangeText={(value) => {
-                        setEditingDraft((current) => ({
-                          ...current,
-                          title: value,
-                        }));
-                        if (value.trim()) {
-                          setEditingError(null);
-                        }
-                      }}
-                      style={styles.input}
-                      placeholder="Nowy tytul"
-                      placeholderTextColor={ui.colors.textSoft}
-                      autoFocus
-                      maxLength={120}
-                      returnKeyType="done"
-                      onSubmitEditing={() => void handleRename(item.id)}
-                    />
-                  ) : (
-                    <>
-                      <Text style={[styles.itemTitle, item.status === 'done' && styles.itemDone]}>
-                        {item.title}
-                      </Text>
-                      <Text style={styles.itemMeta}>
-                        {isShoppingList
-                          ? `${item.status === 'done' ? 'Kupione' : 'Do kupienia'}${
-                              item.quantity || item.unit
-                                ? ` • ${item.quantity ?? ''}${item.quantity && item.unit ? ' ' : ''}${item.unit ?? ''}`
-                                : ''
-                            }`
-                          : isInMyDay
-                            ? `Moj dzien: ${item.myDayDate}`
-                            : 'Poza Moim dniem'}
-                      </Text>
-                      {item.dueDate ? (
-                        <Text style={styles.itemMeta}>
-                          Termin: {isValidDateKey(item.dueDate) ? formatDateLabel(item.dueDate) : item.dueDate}
-                        </Text>
-                      ) : null}
-                      {getRecurrenceSummary(item) ? (
-                        <Text style={styles.itemMeta}>{getRecurrenceSummary(item)}</Text>
-                      ) : null}
-                      {item.note ? (
-                        <Text style={styles.itemNote} numberOfLines={2}>
-                          {item.note}
-                        </Text>
-                      ) : null}
-                      {!isShoppingList && item.parentId ? (
-                        <Text style={styles.itemHint}>Subtask</Text>
-                      ) : null}
-                    </>
-                  )}
-                </View>
-
-                {isShoppingList && formatShoppingAmount(item) ? (
-                  <View style={styles.shoppingAmountBadge}>
-                    <Text style={styles.shoppingAmountText}>{formatShoppingAmount(item)}</Text>
-                  </View>
-                ) : null}
-              </View>
-
-              {isSelected || isEditing ? (
-                <View style={styles.actionsRow}>
-                  {isEditing ? (
-                    <Text style={styles.inputHintInline}>
-                      {editingError ?? 'Enter lub ikona potwierdzenia zapisze zmiane.'}
-                    </Text>
-                  ) : null}
-                  <View style={styles.iconCluster}>
-                    <IconButton
-                      icon="arrow-up"
-                      onPress={() => void handleMoveItem(item, 'up')}
-                      disabled={isEditing}
-                    />
-                    <IconButton
-                      icon="arrow-down"
-                      onPress={() => void handleMoveItem(item, 'down')}
-                      disabled={isEditing}
-                    />
-                    {!isShoppingList ? (
-                      <>
-                        <IconButton
-                          icon="indent"
-                          onPress={() => void handleIndentItem(item)}
-                          disabled={isEditing}
-                        />
-                        <IconButton
-                          icon="outdent"
-                          onPress={() => void handleOutdentItem(item)}
-                          disabled={isEditing || !item.parentId}
-                        />
-                      </>
-                    ) : null}
-                    {!isShoppingList ? (
-                      <IconButton
-                        icon={isInMyDay ? 'weather-sunset-down' : 'weather-sunny'}
-                        onPress={() => void handleToggleMyDay(item)}
-                        active={isInMyDay}
-                      />
-                    ) : null}
-                    <IconButton
-                      icon="magnify"
-                      onPress={() => navigation.navigate('TaskPreview', { itemId: item.id })}
-                    />
-                      {!isEditing ? (
-                        <IconButton
-                          icon="pencil-outline"
-                          onPress={() => {
-                            setEditingItemId(item.id);
-                            setEditingDraft(buildEditorState(item));
-                            setEditingError(null);
-                          }}
-                        />
-                      ) : (
-                      <>
-                        <IconButton
-                          icon="check"
-                          tone="primary"
-                          onPress={() => void handleRename(item.id)}
-                        />
-                          <IconButton
-                            icon="close"
-                            onPress={() => {
-                              setEditingItemId(null);
-                              setEditingDraft(buildEditorState());
-                              setEditingError(null);
-                              setSelectedItemId(null);
-                            }}
-                          />
-                      </>
-                    )}
-                    <IconButton
-                      icon="trash-can-outline"
-                      tone="danger"
-                      onPress={() => confirmDelete(item)}
-                    />
-                  </View>
-                  {!isEditing && !isShoppingList ? (
-                    <View style={styles.scheduleRow}>
-                      <PrimaryButton
-                        label={`Dzis ${formatDateLabel(todayDateKey)}`}
-                        tone={item.myDayDate === todayDateKey ? 'primary' : 'muted'}
-                        onPress={() => void handleSetMyDayDate(item, todayDateKey)}
-                      />
-                      <PrimaryButton
-                        label={`Jutro ${formatDateLabel(tomorrowDateKey)}`}
-                        tone={item.myDayDate === tomorrowDateKey ? 'primary' : 'muted'}
-                        onPress={() => void handleSetMyDayDate(item, tomorrowDateKey)}
-                      />
-                    </View>
-                  ) : null}
-                  {isEditing && !isShoppingList ? (
-                    <View style={styles.detailsEditor}>
-                      <TextInput
-                        value={editingDraft.note}
-                        onChangeText={(value) =>
-                          setEditingDraft((current) => ({
-                            ...current,
-                            note: value,
-                          }))
-                        }
-                        style={[styles.input, styles.noteInput]}
-                        placeholder="Notatka do zadania"
-                        placeholderTextColor={ui.colors.textSoft}
-                        multiline
-                        textAlignVertical="top"
-                      />
-                      <TextInput
-                        value={editingDraft.dueDate}
-                        onChangeText={(value) =>
-                          setEditingDraft((current) => ({
-                            ...current,
-                            dueDate: value,
-                          }))
-                        }
-                        style={styles.input}
-                        placeholder="Termin YYYY-MM-DD"
-                        placeholderTextColor={ui.colors.textSoft}
-                        autoCapitalize="none"
-                      />
-                      <View style={styles.scheduleRow}>
-                        <PrimaryButton
-                          label="Dzisiaj"
-                          tone={editingDraft.dueDate === todayDateKey ? 'primary' : 'muted'}
-                          onPress={() =>
-                            setEditingDraft((current) => ({
-                              ...current,
-                              dueDate: todayDateKey,
-                            }))
-                          }
-                        />
-                        <PrimaryButton
-                          label="Jutro"
-                          tone={editingDraft.dueDate === tomorrowDateKey ? 'primary' : 'muted'}
-                          onPress={() =>
-                            setEditingDraft((current) => ({
-                              ...current,
-                              dueDate: tomorrowDateKey,
-                            }))
-                          }
-                        />
-                        <PrimaryButton
-                          label="Bez daty"
-                          tone={!editingDraft.dueDate ? 'primary' : 'muted'}
-                          onPress={() =>
-                            setEditingDraft((current) => ({
-                              ...current,
-                              dueDate: '',
-                            }))
-                          }
-                        />
-                      </View>
-                      <View style={styles.scheduleRow}>
-                        {recurrenceOptions.map((option) => (
-                          <PrimaryButton
-                            key={`${item.id}-${option}`}
-                            label={recurrenceLabels[option]}
-                            tone={editingDraft.recurrenceType === option ? 'primary' : 'muted'}
-                            onPress={() =>
-                              setEditingDraft((current) => ({
-                                ...current,
-                                recurrenceType: option,
-                              }))
-                            }
-                          />
-                        ))}
-                      </View>
-                      {editingDraft.recurrenceType === 'custom' ? (
-                        <View style={styles.scheduleRow}>
-                          <TextInput
-                            value={editingDraft.recurrenceInterval}
-                            onChangeText={(value) =>
-                              setEditingDraft((current) => ({
-                                ...current,
-                                recurrenceInterval: value.replace(/[^0-9]/g, ''),
-                              }))
-                            }
-                            style={[styles.input, styles.intervalInput]}
-                            placeholder="Interwal"
-                            placeholderTextColor={ui.colors.textSoft}
-                            keyboardType="number-pad"
-                          />
-                          {(['days', 'weeks', 'months'] as RecurrenceUnit[]).map((unit) => (
-                            <PrimaryButton
-                              key={`${item.id}-${unit}`}
-                              label={unit === 'days' ? 'Dni' : unit === 'weeks' ? 'Tygodnie' : 'Miesiace'}
-                              tone={editingDraft.recurrenceUnit === unit ? 'primary' : 'muted'}
-                              onPress={() =>
-                                setEditingDraft((current) => ({
-                                  ...current,
-                                  recurrenceUnit: unit,
-                                }))
-                              }
-                            />
-                          ))}
-                        </View>
-                      ) : null}
-                    </View>
-                  ) : null}
-                  {isEditing && isShoppingList ? (
-                    <View style={styles.detailsEditor}>
-                      <View style={styles.scheduleRow}>
-                        <TextInput
-                          value={editingDraft.quantity}
-                          onChangeText={(value) =>
-                            setEditingDraft((current) => ({
-                              ...current,
-                              quantity: value,
-                            }))
-                          }
-                          style={[styles.input, styles.shoppingMetaInput]}
-                          placeholder="Ilosc"
-                          placeholderTextColor={ui.colors.textSoft}
-                        />
-                        <TextInput
-                          value={editingDraft.unit}
-                          onChangeText={(value) =>
-                            setEditingDraft((current) => ({
-                              ...current,
-                              unit: value,
-                            }))
-                          }
-                          style={[styles.input, styles.shoppingMetaInput]}
-                          placeholder="Jednostka"
-                          placeholderTextColor={ui.colors.textSoft}
-                        />
-                      </View>
-                    </View>
-                  ) : null}
-                </View>
-              ) : null}
-
-              {canShowChildren ? (
-                <View style={styles.childComposer}>
-                  {!isEditing &&
-                  (isSelected ||
-                    (draftChildren[item.id] ?? '').length > 0) ? (
-                    <>
-                      <TextInput
-                        value={draftChildren[item.id] ?? ''}
-                        onChangeText={(value) => {
-                          setDraftChildren((current) => ({
-                            ...current,
-                            [item.id]: value,
-                          }));
-                          if (value.trim()) {
-                            setDraftErrors((current) => ({
-                              ...current,
-                              [item.id]: '',
-                            }));
-                          }
-                        }}
-                        placeholder={item.parentId ? 'Dodaj kolejny poziom' : 'Dodaj subtask'}
-                        placeholderTextColor={ui.colors.textSoft}
-                        style={styles.input}
-                        maxLength={120}
-                        returnKeyType="done"
-                        onSubmitEditing={() => void handleCreateChildTask(item.id)}
-                      />
-                      <Text style={styles.inputHintInline}>
-                        {draftErrors[item.id] ||
-                          (item.parentId
-                              ? 'Nowy poziom zapisze sie lokalnie pod tym elementem.'
-                              : 'Subtask pojawi sie od razu pod wybranym taskiem.')}
-                      </Text>
-                      <View style={styles.subtaskActionsRow}>
-                        <PrimaryButton
-                          label={item.parentId ? 'Dodaj nizej' : 'Dodaj subtask'}
-                          leadingIcon="+"
-                          onPress={() => void handleCreateChildTask(item.id)}
-                        />
-                        {item.hasChildren ? (
-                          <IconButton
-                            icon={expandedIds[item.id] ? 'unfold-less-horizontal' : 'unfold-more-horizontal'}
-                            onPress={() => toggleExpanded(item.id)}
-                          />
-                        ) : null}
-                      </View>
-                    </>
-                  ) : null}
-                </View>
-              ) : null}
-            </Pressable>
-          );
-        })}
+        {!isShoppingList && taskDoneItems.length > 0 ? (
+          <View style={styles.doneSection}>
+            <Text style={styles.doneSectionTitle}>Ukonczone</Text>
+            {taskDoneItems.map(renderItemCard)}
+          </View>
+        ) : null}
 
         {isShoppingList && shoppingDoneItems.length > 0 ? (
           <View style={styles.doneSection}>
             <Text style={styles.doneSectionTitle}>Kupione</Text>
-            {shoppingDoneItems.map((item) => {
-              const isEditing = editingItemId === item.id;
-              const isSelected = selectedItemId === item.id;
-              const isInMyDay = item.myDayDate === todayKey();
-
-              return (
-                <Pressable
-                  key={item.id}
-                  onPress={() => setSelectedItemId((current) => (current === item.id ? null : item.id))}
-                  style={[styles.itemCard, styles.itemCardDone, isSelected && styles.itemCardSelected]}
-                >
-                  <View style={styles.itemTopRow}>
-                    <View style={styles.treeSpacer} />
-                    <Pressable
-                      onPress={() => void handleToggleDone(item)}
-                      style={[styles.checkbox, styles.checkboxDone]}
-                    >
-                      <Text style={styles.checkboxLabel}>✓</Text>
-                    </Pressable>
-                    <View style={styles.itemContent}>
-                      {isEditing ? (
-                        <TextInput
-                          value={editingDraft.title}
-                          onChangeText={(value) => {
-                            setEditingDraft((current) => ({
-                              ...current,
-                              title: value,
-                            }));
-                            if (value.trim()) {
-                              setEditingError(null);
-                            }
-                          }}
-                          style={styles.input}
-                          placeholder="Nowy tytul"
-                          placeholderTextColor={ui.colors.textSoft}
-                          autoFocus
-                          maxLength={120}
-                          returnKeyType="done"
-                          onSubmitEditing={() => void handleRename(item.id)}
-                        />
-                      ) : (
-                        <>
-                          <Text style={[styles.itemTitle, styles.itemDone]}>{item.title}</Text>
-                          <Text style={styles.itemMeta}>
-                            {`Kupione${
-                              item.quantity || item.unit
-                                ? ` • ${item.quantity ?? ''}${item.quantity && item.unit ? ' ' : ''}${item.unit ?? ''}`
-                                : ''
-                            }`}
-                          </Text>
-                        </>
-                      )}
-                    </View>
-
-                    {formatShoppingAmount(item) ? (
-                      <View style={styles.shoppingAmountBadge}>
-                        <Text style={styles.shoppingAmountText}>{formatShoppingAmount(item)}</Text>
-                      </View>
-                    ) : null}
-                  </View>
-
-                  {isSelected || isEditing ? (
-                    <View style={styles.actionsRow}>
-                      <View style={styles.iconCluster}>
-                        {!isEditing ? (
-                          <IconButton
-                            icon="magnify"
-                            onPress={() => navigation.navigate('TaskPreview', { itemId: item.id })}
-                          />
-                        ) : null}
-                        {!isEditing ? (
-                          <IconButton
-                            icon="pencil-outline"
-                            onPress={() => {
-                              setEditingItemId(item.id);
-                              setEditingDraft(buildEditorState(item));
-                              setEditingError(null);
-                            }}
-                          />
-                        ) : (
-                          <>
-                            <IconButton
-                              icon="check"
-                              tone="primary"
-                              onPress={() => void handleRename(item.id)}
-                            />
-                            <IconButton
-                              icon="close"
-                              onPress={() => {
-                                setEditingItemId(null);
-                                setEditingDraft(buildEditorState());
-                                setEditingError(null);
-                                setSelectedItemId(null);
-                              }}
-                            />
-                          </>
-                        )}
-                        <IconButton
-                          icon="trash-can-outline"
-                          tone="danger"
-                          onPress={() => confirmDelete(item)}
-                        />
-                      </View>
-                    </View>
-                  ) : null}
-                </Pressable>
-              );
-            })}
+            {shoppingDoneItems.map(renderItemCard)}
           </View>
         ) : null}
       </View>

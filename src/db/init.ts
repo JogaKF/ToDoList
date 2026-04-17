@@ -28,6 +28,8 @@ export async function initDatabase(db: SQLiteDatabase) {
       dueDate TEXT,
       recurrenceType TEXT NOT NULL DEFAULT 'none',
       recurrenceConfig TEXT,
+      recurrenceOriginId TEXT,
+      previousRecurringItemId TEXT,
       myDayDate TEXT,
       position REAL NOT NULL,
       createdAt TEXT NOT NULL,
@@ -79,6 +81,14 @@ async function ensureItemsColumns(db: SQLiteDatabase) {
 
   if (!columnNames.has('recurrenceConfig')) {
     await db.execAsync(`ALTER TABLE items ADD COLUMN recurrenceConfig TEXT;`);
+  }
+
+  if (!columnNames.has('recurrenceOriginId')) {
+    await db.execAsync(`ALTER TABLE items ADD COLUMN recurrenceOriginId TEXT;`);
+  }
+
+  if (!columnNames.has('previousRecurringItemId')) {
+    await db.execAsync(`ALTER TABLE items ADD COLUMN previousRecurringItemId TEXT;`);
   }
 }
 

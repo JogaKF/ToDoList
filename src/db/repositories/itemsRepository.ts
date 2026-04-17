@@ -3,6 +3,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import type { DeletedItem, Item, RecurrenceType } from '../../features/items/types';
 import { createId } from '../../utils/id';
 import { nowIso } from '../../utils/date';
+import { getNextRecurringDate } from '../../utils/recurrence';
 
 type CreateItemInput = {
   listId: string;
@@ -71,6 +72,8 @@ export const itemsRepository = {
       dueDate: input.dueDate ?? null,
       recurrenceType: input.recurrenceType ?? 'none',
       recurrenceConfig: input.recurrenceConfig ?? null,
+      recurrenceOriginId: input.recurrenceType && input.recurrenceType !== 'none' ? createId('recurrence') : null,
+      previousRecurringItemId: null,
       myDayDate: null,
       position,
       createdAt: timestamp,
@@ -80,8 +83,8 @@ export const itemsRepository = {
 
     await db.runAsync(
       `INSERT INTO items (
-        id, listId, parentId, type, title, quantity, unit, note, status, dueDate, recurrenceType, recurrenceConfig, myDayDate, position, createdAt, updatedAt, deletedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        id, listId, parentId, type, title, quantity, unit, note, status, dueDate, recurrenceType, recurrenceConfig, recurrenceOriginId, previousRecurringItemId, myDayDate, position, createdAt, updatedAt, deletedAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       item.id,
       item.listId,
       item.parentId,
@@ -94,6 +97,8 @@ export const itemsRepository = {
       item.dueDate,
       item.recurrenceType,
       item.recurrenceConfig,
+      item.recurrenceOriginId,
+      item.previousRecurringItemId,
       item.myDayDate,
       item.position,
       item.createdAt,
@@ -130,7 +135,11 @@ export const itemsRepository = {
   ) {
     await db.runAsync(
       `UPDATE items
-       SET title = ?, quantity = ?, unit = ?, note = ?, dueDate = ?, recurrenceType = ?, recurrenceConfig = ?, updatedAt = ?
+       SET title = ?, quantity = ?, unit = ?, note = ?, dueDate = ?, recurrenceType = ?, recurrenceConfig = ?, recurrenceOriginId = CASE
+         WHEN ? != 'none' AND recurrenceOriginId IS NULL THEN id
+         WHEN ? = 'none' THEN NULL
+         ELSE recurrenceOriginId
+       END, updatedAt = ?
        WHERE id = ?`,
       input.title.trim(),
       input.quantity?.trim() ? input.quantity.trim() : null,
@@ -139,6 +148,8 @@ export const itemsRepository = {
       input.dueDate,
       input.recurrenceType,
       input.recurrenceConfig,
+      input.recurrenceType,
+      input.recurrenceType,
       nowIso(),
       id
     );
@@ -210,6 +221,16 @@ export const itemsRepository = {
     const timestamp = nowIso();
 
     await db.withExclusiveTransactionAsync(async (txn) => {
+      if (item.recurrenceType !== 'none') {
+        if (nextStatus === 'done') {
+          await this.completeRecurringItem(txn, item, timestamp);
+          return;
+        }
+
+        await this.undoRecurringCompletion(txn, item, timestamp);
+        return;
+      }
+
       const descendantIds = await this.getDescendantIds(txn, item.id);
       const targetIds = [item.id, ...descendantIds];
 
@@ -239,6 +260,106 @@ export const itemsRepository = {
         }
       }
     });
+  },
+
+  async completeRecurringItem(db: SQLiteDatabase, item: Item, timestamp: string) {
+    const subtree = await this.getSubtreeItems(db, item.id);
+    const nextDueDate = getNextRecurringDate(item.dueDate, item.recurrenceType, item.recurrenceConfig);
+
+    for (const subtreeItem of subtree) {
+      await db.runAsync(
+        `UPDATE items
+         SET status = ?, myDayDate = ?, updatedAt = ?
+         WHERE id = ? AND deletedAt IS NULL`,
+        'done',
+        null,
+        timestamp,
+        subtreeItem.id
+      );
+    }
+
+    const idMap = new Map<string, string>();
+    const rootPosition = await this.getNextPosition(db, item.listId, item.parentId);
+
+    for (const subtreeItem of subtree) {
+      const newId = createId('item');
+      idMap.set(subtreeItem.id, newId);
+
+      const isRoot = subtreeItem.id === item.id;
+      const clonedParentId = isRoot ? subtreeItem.parentId : idMap.get(subtreeItem.parentId ?? '') ?? null;
+
+      await db.runAsync(
+        `INSERT INTO items (
+          id, listId, parentId, type, title, quantity, unit, note, status, dueDate, recurrenceType, recurrenceConfig, recurrenceOriginId, previousRecurringItemId, myDayDate, position, createdAt, updatedAt, deletedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        newId,
+        subtreeItem.listId,
+        clonedParentId,
+        subtreeItem.type,
+        subtreeItem.title,
+        subtreeItem.quantity,
+        subtreeItem.unit,
+        subtreeItem.note,
+        'todo',
+        isRoot ? nextDueDate : subtreeItem.dueDate,
+        subtreeItem.recurrenceType,
+        subtreeItem.recurrenceConfig,
+        subtreeItem.recurrenceOriginId ?? item.recurrenceOriginId ?? item.id,
+        subtreeItem.id,
+        null,
+        isRoot ? rootPosition : subtreeItem.position,
+        timestamp,
+        timestamp,
+        null
+      );
+    }
+  },
+
+  async undoRecurringCompletion(db: SQLiteDatabase, item: Item, timestamp: string) {
+    const subtree = await this.getSubtreeItems(db, item.id, true);
+    const subtreeIds = new Set(subtree.map((subtreeItem) => subtreeItem.id));
+
+    const allActiveItems = await db.getAllAsync<Item>(
+      `SELECT * FROM items WHERE deletedAt IS NULL`
+    );
+
+    const generatedItems = allActiveItems.filter((candidate) =>
+      candidate.previousRecurringItemId ? subtreeIds.has(candidate.previousRecurringItemId) : false
+    );
+
+    for (const generatedItem of generatedItems) {
+      await db.runAsync(
+        `UPDATE items
+         SET deletedAt = ?, updatedAt = ?
+         WHERE id = ? AND deletedAt IS NULL`,
+        timestamp,
+        timestamp,
+        generatedItem.id
+      );
+    }
+
+    for (const subtreeItem of subtree) {
+      await db.runAsync(
+        `UPDATE items
+         SET status = ?, updatedAt = ?
+         WHERE id = ? AND deletedAt IS NULL`,
+        'todo',
+        timestamp,
+        subtreeItem.id
+      );
+    }
+
+    const ancestorIds = await this.getAncestorIds(db, item.parentId);
+    for (const ancestorId of ancestorIds) {
+      await db.runAsync(
+        `UPDATE items
+         SET status = ?, updatedAt = ?
+         WHERE id = ? AND deletedAt IS NULL`,
+        'todo',
+        timestamp,
+        ancestorId
+      );
+    }
   },
 
   async setMyDay(db: SQLiteDatabase, id: string, dateKey: string | null) {
@@ -391,6 +512,42 @@ export const itemsRepository = {
       queue.push(...(childrenByParent.get(currentId) ?? []));
     }
 
+    return result;
+  },
+
+  async getSubtreeItems(db: SQLiteDatabase, rootId: string, includeDeleted = false) {
+    const allItems = await db.getAllAsync<Item>(
+      `SELECT * FROM items ${includeDeleted ? '' : 'WHERE deletedAt IS NULL'}`
+    );
+
+    const itemsById = new Map(allItems.map((item) => [item.id, item]));
+    const childrenByParent = new Map<string, Item[]>();
+
+    for (const item of allItems) {
+      if (!item.parentId) {
+        continue;
+      }
+
+      const bucket = childrenByParent.get(item.parentId) ?? [];
+      bucket.push(item);
+      bucket.sort((left, right) => left.position - right.position || left.createdAt.localeCompare(right.createdAt));
+      childrenByParent.set(item.parentId, bucket);
+    }
+
+    const root = itemsById.get(rootId);
+    if (!root) {
+      return [];
+    }
+
+    const result: Item[] = [];
+    const visit = (current: Item) => {
+      result.push(current);
+      for (const child of childrenByParent.get(current.id) ?? []) {
+        visit(child);
+      }
+    };
+
+    visit(root);
     return result;
   },
 

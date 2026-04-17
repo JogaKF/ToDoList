@@ -21,6 +21,8 @@ export type Item = {
   dueDate: string | null;
   recurrenceType: RecurrenceType;
   recurrenceConfig: string | null;
+  recurrenceOriginId: string | null;
+  previousRecurringItemId: string | null;
   myDayDate: string | null;
   position: number;
   createdAt: string;
