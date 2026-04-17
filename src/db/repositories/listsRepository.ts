@@ -136,6 +136,36 @@ export const listsRepository = {
     });
   },
 
+  async hardDelete(db: SQLiteDatabase, id: string) {
+    await db.withExclusiveTransactionAsync(async (txn) => {
+      await txn.runAsync(
+        `DELETE FROM items
+         WHERE listId = ?`,
+        id
+      );
+
+      await txn.runAsync(
+        `DELETE FROM lists
+         WHERE id = ?`,
+        id
+      );
+    });
+  },
+
+  async hardDeleteAllDeleted(db: SQLiteDatabase) {
+    await db.withExclusiveTransactionAsync(async (txn) => {
+      await txn.runAsync(
+        `DELETE FROM items
+         WHERE deletedAt IS NOT NULL`
+      );
+
+      await txn.runAsync(
+        `DELETE FROM lists
+         WHERE deletedAt IS NOT NULL`
+      );
+    });
+  },
+
   async getNextPosition(db: SQLiteDatabase) {
     const row = await db.getFirstAsync<{ maxPosition: number | null }>(
       `SELECT MAX(position) as maxPosition

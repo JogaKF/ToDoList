@@ -8,6 +8,7 @@ import { IconButton } from '../components/common/IconButton';
 import { PrimaryButton } from '../components/common/PrimaryButton';
 import { ScreenContainer } from '../components/common/ScreenContainer';
 import { StateCard } from '../components/common/StateCard';
+import { useRecovery } from '../app/providers/RecoveryProvider';
 import { useI18n } from '../app/providers/PreferencesProvider';
 import { useAppDatabase } from '../db/sqlite';
 import { listsService } from '../features/lists/service';
@@ -22,6 +23,7 @@ export function ListsScreen() {
   const db = useAppDatabase();
   const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation<Navigation>();
+  const { pushUndoAction, mutationTick } = useRecovery();
   const t = useI18n();
   const [lists, setLists] = useState<TodoList[]>([]);
   const [summaries, setSummaries] = useState<Record<string, TodoListSummary>>({});
@@ -50,7 +52,7 @@ export function ListsScreen() {
 
   useEffect(() => {
     void loadLists();
-  }, [loadLists]);
+  }, [loadLists, mutationTick]);
 
   useFocusEffect(
     useCallback(() => {
@@ -90,11 +92,18 @@ export function ListsScreen() {
   );
 
   const handleDeleteList = useCallback(
-    async (listId: string) => {
-      await listsService.remove(db, listId);
+    async (list: TodoList) => {
+      await listsService.remove(db, list.id);
+      pushUndoAction({
+        id: `delete-list-${list.id}-${Date.now()}`,
+        label: `Usunieto liste: ${list.name}`,
+        perform: async (undoDb) => {
+          await listsService.restore(undoDb, list.id);
+        },
+      });
       await loadLists();
     },
-    [db, loadLists]
+    [db, loadLists, pushUndoAction]
   );
 
   return (
@@ -250,7 +259,7 @@ export function ListsScreen() {
                         <IconButton
                           icon="trash-can-outline"
                           tone="danger"
-                          onPress={() => void handleDeleteList(list.id)}
+                          onPress={() => void handleDeleteList(list)}
                         />
                       </View>
                     ) : null}

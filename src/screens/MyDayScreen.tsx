@@ -8,6 +8,7 @@ import { IconButton } from '../components/common/IconButton';
 import { PrimaryButton } from '../components/common/PrimaryButton';
 import { ScreenContainer } from '../components/common/ScreenContainer';
 import { StateCard } from '../components/common/StateCard';
+import { useRecovery } from '../app/providers/RecoveryProvider';
 import { useI18n } from '../app/providers/PreferencesProvider';
 import { useAppDatabase } from '../db/sqlite';
 import { buildItemTree, collectExpandableIds, flattenVisibleTree } from '../features/items/tree';
@@ -31,6 +32,7 @@ export function MyDayScreen() {
   const db = useAppDatabase();
   const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation<Navigation>();
+  const { pushUndoAction, mutationTick } = useRecovery();
   const { expandedIds, toggleExpanded, expandMany } = useTreeUiStore();
   const t = useI18n();
   const [items, setItems] = useState<Item[]>([]);
@@ -52,7 +54,7 @@ export function MyDayScreen() {
 
   useEffect(() => {
     void loadData();
-  }, [loadData]);
+  }, [loadData, mutationTick]);
 
   useFocusEffect(
     useCallback(() => {
@@ -153,7 +155,23 @@ export function MyDayScreen() {
                 )}
                 <Pressable
                   onPress={() => {
-                    void myDayService.toggleDone(db, item).then(loadData);
+                    void myDayService.toggleDone(db, item).then(async () => {
+                      pushUndoAction({
+                        id: `toggle-item-${item.id}-${Date.now()}`,
+                        label:
+                          item.status === 'done'
+                            ? `Cofnieto ukonczenie: ${item.title}`
+                            : `Zmieniono status zadania: ${item.title}`,
+                        perform: async (undoDb) => {
+                          const latestItem = await myDayService.getById(undoDb, item.id);
+                          if (!latestItem) {
+                            return;
+                          }
+                          await myDayService.toggleDone(undoDb, latestItem);
+                        },
+                      });
+                      await loadData();
+                    });
                   }}
                   style={[styles.checkbox, item.status === 'done' && styles.checkboxDone]}
                 >
@@ -208,7 +226,23 @@ export function MyDayScreen() {
                       )}
                       <Pressable
                         onPress={() => {
-                          void myDayService.toggleDone(db, item).then(loadData);
+                          void myDayService.toggleDone(db, item).then(async () => {
+                            pushUndoAction({
+                              id: `toggle-item-${item.id}-${Date.now()}`,
+                              label:
+                                item.status === 'done'
+                                  ? `Cofnieto ukonczenie: ${item.title}`
+                                  : `Zmieniono status zadania: ${item.title}`,
+                              perform: async (undoDb) => {
+                                const latestItem = await myDayService.getById(undoDb, item.id);
+                                if (!latestItem) {
+                                  return;
+                                }
+                                await myDayService.toggleDone(undoDb, latestItem);
+                              },
+                            });
+                            await loadData();
+                          });
                         }}
                         style={[styles.checkbox, item.status === 'done' && styles.checkboxDone]}
                       >

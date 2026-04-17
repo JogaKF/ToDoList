@@ -162,6 +162,14 @@ export const itemsService = {
     return itemsRepository.restore(db, itemId);
   },
 
+  hardDelete(db: SQLiteDatabase, itemId: string) {
+    return itemsRepository.hardDelete(db, itemId);
+  },
+
+  hardDeleteAllDeleted(db: SQLiteDatabase) {
+    return itemsRepository.hardDeleteAllDeleted(db);
+  },
+
   addToMyDay(db: SQLiteDatabase, itemId: string, dateKey = todayKey()) {
     return itemsRepository.setMyDay(db, itemId, dateKey);
   },

@@ -34,4 +34,12 @@ export const listsService = {
   restore(db: SQLiteDatabase, listId: string) {
     return listsRepository.restore(db, listId);
   },
+
+  hardDelete(db: SQLiteDatabase, listId: string) {
+    return listsRepository.hardDelete(db, listId);
+  },
+
+  hardDeleteAllDeleted(db: SQLiteDatabase) {
+    return listsRepository.hardDeleteAllDeleted(db);
+  },
 };

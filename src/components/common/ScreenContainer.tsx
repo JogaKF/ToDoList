@@ -1,6 +1,8 @@
 import { PropsWithChildren } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { UndoBar, useRecovery } from '../../app/providers/RecoveryProvider';
 import { useTheme } from '../../app/providers/PreferencesProvider';
 import { ui } from '../../theme/ui';
 
@@ -10,6 +12,9 @@ type ScreenContainerProps = PropsWithChildren<{
 
 export function ScreenContainer({ children, bottomInset = 16 }: ScreenContainerProps) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
+  const { currentUndo } = useRecovery();
+  const contentBottomInset = bottomInset + (currentUndo ? 130 + Math.max(insets.bottom, 20) : 0);
 
   return (
     <KeyboardAvoidingView
@@ -22,12 +27,13 @@ export function ScreenContainer({ children, bottomInset = 16 }: ScreenContainerP
         <View style={[styles.gridLineHorizontal, { backgroundColor: theme.border }]} />
       </View>
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: bottomInset }]}
+        contentContainerStyle={[styles.content, { paddingBottom: contentBottomInset }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.inner}>{children}</View>
       </ScrollView>
+      <UndoBar />
     </KeyboardAvoidingView>
   );
 }

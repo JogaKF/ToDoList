@@ -489,6 +489,28 @@ export const itemsRepository = {
     });
   },
 
+  async hardDelete(db: SQLiteDatabase, id: string) {
+    await db.withExclusiveTransactionAsync(async (txn) => {
+      const idsToDelete = await this.getDescendantIds(txn, id, true);
+      const targets = [id, ...idsToDelete];
+
+      for (const targetId of targets) {
+        await txn.runAsync(
+          `DELETE FROM items
+           WHERE id = ?`,
+          targetId
+        );
+      }
+    });
+  },
+
+  async hardDeleteAllDeleted(db: SQLiteDatabase) {
+    await db.runAsync(
+      `DELETE FROM items
+       WHERE deletedAt IS NOT NULL`
+    );
+  },
+
   async getDescendantIds(db: SQLiteDatabase, rootId: string, includeDeleted = false) {
     const allItems = await db.getAllAsync<Pick<Item, 'id' | 'parentId'>>(
       `SELECT id, parentId FROM items ${includeDeleted ? '' : 'WHERE deletedAt IS NULL'}`

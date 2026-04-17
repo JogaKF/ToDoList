@@ -9,6 +9,7 @@ import { IconButton } from '../components/common/IconButton';
 import { PrimaryButton } from '../components/common/PrimaryButton';
 import { ScreenContainer } from '../components/common/ScreenContainer';
 import { StateCard } from '../components/common/StateCard';
+import { useRecovery } from '../app/providers/RecoveryProvider';
 import { useI18n } from '../app/providers/PreferencesProvider';
 import { useAppDatabase } from '../db/sqlite';
 import { itemsService } from '../features/items/service';
@@ -164,6 +165,7 @@ export function ListDetailsScreen() {
   const navigation = useNavigation<Navigation>();
   const route = useRoute<DetailsRoute>();
   const { expandedIds, toggleExpanded, expandMany, collapseMany } = useTreeUiStore();
+  const { pushUndoAction, mutationTick } = useRecovery();
   const t = useI18n();
 
   const [list, setList] = useState<TodoList | null>(null);
@@ -248,7 +250,7 @@ export function ListDetailsScreen() {
 
   useEffect(() => {
     void loadData();
-  }, [loadData]);
+  }, [loadData, mutationTick]);
 
   useFocusEffect(
     useCallback(() => {
@@ -354,17 +356,38 @@ export function ListDetailsScreen() {
   const handleToggleDone = useCallback(
     async (item: ItemTreeNode) => {
       await itemsService.toggleDone(db, item);
+      pushUndoAction({
+        id: `toggle-item-${item.id}-${Date.now()}`,
+        label:
+          item.status === 'done'
+            ? `Cofnieto ukonczenie: ${item.title}`
+            : `Zmieniono status zadania: ${item.title}`,
+        perform: async (undoDb) => {
+          const latestItem = await itemsService.getById(undoDb, item.id);
+          if (!latestItem) {
+            return;
+          }
+          await itemsService.toggleDone(undoDb, latestItem);
+        },
+      });
       await loadData();
     },
-    [db, loadData]
+    [db, loadData, pushUndoAction]
   );
 
   const handleDelete = useCallback(
-    async (itemId: string) => {
-      await itemsService.remove(db, itemId);
+    async (item: ItemTreeNode) => {
+      await itemsService.remove(db, item.id);
+      pushUndoAction({
+        id: `delete-item-${item.id}-${Date.now()}`,
+        label: `Usunieto element: ${item.title}`,
+        perform: async (undoDb) => {
+          await itemsService.restore(undoDb, item.id);
+        },
+      });
       await loadData();
     },
-    [db, loadData]
+    [db, loadData, pushUndoAction]
   );
 
   const confirmDelete = useCallback(
@@ -383,7 +406,7 @@ export function ListDetailsScreen() {
             text: 'Usun',
             style: 'destructive',
             onPress: () => {
-              void handleDelete(item.id);
+              void handleDelete(item);
             },
           },
         ]

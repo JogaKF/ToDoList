@@ -7,6 +7,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { PrimaryButton } from '../components/common/PrimaryButton';
 import { ScreenContainer } from '../components/common/ScreenContainer';
 import { StateCard } from '../components/common/StateCard';
+import { useRecovery } from '../app/providers/RecoveryProvider';
 import { useAppDatabase } from '../db/sqlite';
 import { itemsService } from '../features/items/service';
 import type { Item, RecurrenceType, RecurrenceUnit } from '../features/items/types';
@@ -124,6 +125,7 @@ function formatShoppingSummary(item: Pick<Item, 'category' | 'quantity' | 'unit'
 export function TaskPreviewScreen() {
   const db = useAppDatabase();
   const navigation = useNavigation<Navigation>();
+  const { pushUndoAction, mutationTick } = useRecovery();
   const route = useRoute<PreviewRoute>();
   const [item, setItem] = useState<Item | null>(null);
   const [draft, setDraft] = useState<TaskEditorState>(buildEditorState());
@@ -143,7 +145,7 @@ export function TaskPreviewScreen() {
 
   useEffect(() => {
     void loadItem();
-  }, [loadItem]);
+  }, [loadItem, mutationTick]);
 
   useFocusEffect(
     useCallback(() => {
@@ -223,9 +225,23 @@ export function TaskPreviewScreen() {
     }
 
     await itemsService.toggleDone(db, item);
+    pushUndoAction({
+      id: `toggle-item-${item.id}-${Date.now()}`,
+      label:
+        item.status === 'done'
+          ? `Cofnieto ukonczenie: ${item.title}`
+          : `Zmieniono status zadania: ${item.title}`,
+      perform: async (undoDb) => {
+        const latestItem = await itemsService.getById(undoDb, item.id);
+        if (!latestItem) {
+          return;
+        }
+        await itemsService.toggleDone(undoDb, latestItem);
+      },
+    });
     await loadItem();
     setSaveMessage(item.status === 'done' ? 'Zadanie wrocilo do aktywnych.' : 'Status zadania zostal zaktualizowany.');
-  }, [db, item, loadItem]);
+  }, [db, item, loadItem, pushUndoAction]);
 
   const handleSetMyDayDate = useCallback(
     async (dateKey: string | null) => {
