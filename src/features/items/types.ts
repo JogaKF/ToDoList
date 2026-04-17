@@ -1,5 +1,12 @@
 export type ItemType = 'task' | 'shopping';
 export type ItemStatus = 'todo' | 'done';
+export type RecurrenceType = 'none' | 'daily' | 'weekly' | 'monthly' | 'weekdays' | 'custom';
+export type RecurrenceUnit = 'days' | 'weeks' | 'months';
+
+export type RecurrenceConfig = {
+  interval: number;
+  unit: RecurrenceUnit;
+};
 
 export type Item = {
   id: string;
@@ -7,7 +14,11 @@ export type Item = {
   parentId: string | null;
   type: ItemType;
   title: string;
+  note: string | null;
   status: ItemStatus;
+  dueDate: string | null;
+  recurrenceType: RecurrenceType;
+  recurrenceConfig: string | null;
   myDayDate: string | null;
   position: number;
   createdAt: string;

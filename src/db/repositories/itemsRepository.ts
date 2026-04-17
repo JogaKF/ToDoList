@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import type { DeletedItem, Item } from '../../features/items/types';
+import type { DeletedItem, Item, RecurrenceType } from '../../features/items/types';
 import { createId } from '../../utils/id';
 import { nowIso } from '../../utils/date';
 
@@ -9,9 +9,21 @@ type CreateItemInput = {
   title: string;
   parentId?: string | null;
   type?: Item['type'];
+  note?: string | null;
+  dueDate?: string | null;
+  recurrenceType?: RecurrenceType;
+  recurrenceConfig?: string | null;
 };
 
 export const itemsRepository = {
+  async getById(db: SQLiteDatabase, id: string) {
+    return db.getFirstAsync<Item>(
+      `SELECT * FROM items
+       WHERE id = ? AND deletedAt IS NULL`,
+      id
+    );
+  },
+
   async getByListId(db: SQLiteDatabase, listId: string) {
     return db.getAllAsync<Item>(
       `SELECT * FROM items
@@ -50,7 +62,11 @@ export const itemsRepository = {
       parentId: input.parentId ?? null,
       type: input.type ?? 'task',
       title: input.title.trim(),
+      note: input.note?.trim() ? input.note.trim() : null,
       status: 'todo',
+      dueDate: input.dueDate ?? null,
+      recurrenceType: input.recurrenceType ?? 'none',
+      recurrenceConfig: input.recurrenceConfig ?? null,
       myDayDate: null,
       position,
       createdAt: timestamp,
@@ -60,14 +76,18 @@ export const itemsRepository = {
 
     await db.runAsync(
       `INSERT INTO items (
-        id, listId, parentId, type, title, status, myDayDate, position, createdAt, updatedAt, deletedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        id, listId, parentId, type, title, note, status, dueDate, recurrenceType, recurrenceConfig, myDayDate, position, createdAt, updatedAt, deletedAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       item.id,
       item.listId,
       item.parentId,
       item.type,
       item.title,
+      item.note,
       item.status,
+      item.dueDate,
+      item.recurrenceType,
+      item.recurrenceConfig,
       item.myDayDate,
       item.position,
       item.createdAt,
@@ -84,6 +104,31 @@ export const itemsRepository = {
        SET title = ?, updatedAt = ?
        WHERE id = ?`,
       title.trim(),
+      nowIso(),
+      id
+    );
+  },
+
+  async updateDetails(
+    db: SQLiteDatabase,
+    id: string,
+    input: {
+      title: string;
+      note: string | null;
+      dueDate: string | null;
+      recurrenceType: RecurrenceType;
+      recurrenceConfig: string | null;
+    }
+  ) {
+    await db.runAsync(
+      `UPDATE items
+       SET title = ?, note = ?, dueDate = ?, recurrenceType = ?, recurrenceConfig = ?, updatedAt = ?
+       WHERE id = ?`,
+      input.title.trim(),
+      input.note?.trim() ? input.note.trim() : null,
+      input.dueDate,
+      input.recurrenceType,
+      input.recurrenceConfig,
       nowIso(),
       id
     );

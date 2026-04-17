@@ -10,6 +10,7 @@ import { ListDetailsScreen } from '../../screens/ListDetailsScreen';
 import { MyDayScreen } from '../../screens/MyDayScreen';
 import { TrashScreen } from '../../screens/TrashScreen';
 import { SettingsScreen } from '../../screens/SettingsScreen';
+import { TaskPreviewScreen } from '../../screens/TaskPreviewScreen';
 
 import type { HomeTabParamList, RootStackParamList } from './types';
 
@@ -107,6 +108,11 @@ export function AppNavigator() {
           name="ListDetails"
           component={ListDetailsScreen}
           options={{ title: t('list_details') }}
+        />
+        <RootStack.Screen
+          name="TaskPreview"
+          component={TaskPreviewScreen}
+          options={{ title: 'Podglad zadania' }}
         />
       </RootStack.Navigator>
     </NavigationContainer>

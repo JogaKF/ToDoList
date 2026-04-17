@@ -13,7 +13,7 @@ import { useI18n } from '../app/providers/PreferencesProvider';
 import { useAppDatabase } from '../db/sqlite';
 import { itemsService } from '../features/items/service';
 import { collectExpandableIds, flattenVisibleTree } from '../features/items/tree';
-import type { ItemTreeNode } from '../features/items/types';
+import type { ItemTreeNode, RecurrenceType, RecurrenceUnit } from '../features/items/types';
 import { useTreeUiStore } from '../features/items/useTreeUiStore';
 import { listsService } from '../features/lists/service';
 import type { TodoList } from '../features/lists/types';
@@ -24,6 +24,78 @@ import type { RootStackParamList } from '../app/navigation/types';
 
 type Navigation = NativeStackNavigationProp<RootStackParamList, 'ListDetails'>;
 type DetailsRoute = RouteProp<RootStackParamList, 'ListDetails'>;
+type TaskEditorState = {
+  title: string;
+  note: string;
+  dueDate: string;
+  recurrenceType: RecurrenceType;
+  recurrenceInterval: string;
+  recurrenceUnit: RecurrenceUnit;
+};
+
+const recurrenceOptions: RecurrenceType[] = ['none', 'daily', 'weekly', 'monthly', 'weekdays', 'custom'];
+const recurrenceLabels: Record<RecurrenceType, string> = {
+  none: 'Jednorazowe',
+  daily: 'Codziennie',
+  weekly: 'Co tydzien',
+  monthly: 'Co miesiac',
+  weekdays: 'Dni robocze',
+  custom: 'Niestandardowo',
+};
+
+function isValidDateKey(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function parseRecurrenceConfig(raw: string | null) {
+  if (!raw) {
+    return { interval: '1', unit: 'weeks' as RecurrenceUnit };
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as { interval?: number; unit?: RecurrenceUnit };
+    return {
+      interval: String(parsed.interval ?? 1),
+      unit: parsed.unit ?? 'weeks',
+    };
+  } catch {
+    return { interval: '1', unit: 'weeks' as RecurrenceUnit };
+  }
+}
+
+function buildEditorState(item?: ItemTreeNode | null): TaskEditorState {
+  const parsed = parseRecurrenceConfig(item?.recurrenceConfig ?? null);
+
+  return {
+    title: item?.title ?? '',
+    note: item?.note ?? '',
+    dueDate: item?.dueDate ?? '',
+    recurrenceType: item?.recurrenceType ?? 'none',
+    recurrenceInterval: parsed.interval,
+    recurrenceUnit: parsed.unit,
+  };
+}
+
+function getRecurrenceSummary(item: ItemTreeNode) {
+  switch (item.recurrenceType) {
+    case 'daily':
+      return 'Powtarza sie codziennie';
+    case 'weekly':
+      return 'Powtarza sie co tydzien';
+    case 'monthly':
+      return 'Powtarza sie co miesiac';
+    case 'weekdays':
+      return 'Powtarza sie w dni robocze';
+    case 'custom': {
+      const parsed = parseRecurrenceConfig(item.recurrenceConfig);
+      const unitLabel =
+        parsed.unit === 'days' ? 'dni' : parsed.unit === 'weeks' ? 'tygodnie' : 'miesiace';
+      return `Powtarza sie co ${parsed.interval} ${unitLabel}`;
+    }
+    default:
+      return null;
+  }
+}
 
 export function ListDetailsScreen() {
   const db = useAppDatabase();
@@ -35,9 +107,15 @@ export function ListDetailsScreen() {
   const [list, setList] = useState<TodoList | null>(null);
   const [tree, setTree] = useState<ItemTreeNode[]>([]);
   const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [composerNote, setComposerNote] = useState('');
+  const [composerDueDate, setComposerDueDate] = useState('');
+  const [composerRecurrenceType, setComposerRecurrenceType] = useState<RecurrenceType>('none');
+  const [composerRecurrenceInterval, setComposerRecurrenceInterval] = useState('1');
+  const [composerRecurrenceUnit, setComposerRecurrenceUnit] = useState<RecurrenceUnit>('weeks');
+  const [showComposerDetails, setShowComposerDetails] = useState(false);
   const [draftChildren, setDraftChildren] = useState<Record<string, string>>({});
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
-  const [editingTitle, setEditingTitle] = useState('');
+  const [editingDraft, setEditingDraft] = useState<TaskEditorState>(buildEditorState());
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [newTaskError, setNewTaskError] = useState<string | null>(null);
   const [editingError, setEditingError] = useState<string | null>(null);
@@ -110,15 +188,44 @@ export function ListDetailsScreen() {
       return;
     }
 
+    if (!isShoppingList && composerDueDate.trim() && !isValidDateKey(composerDueDate.trim())) {
+      setNewTaskError('Data zadania musi miec format YYYY-MM-DD.');
+      return;
+    }
+
     if (list?.type === 'shopping') {
       await itemsService.createShoppingItems(db, listId, nextTitle);
     } else {
-      await itemsService.createTask(db, listId, nextTitle);
+      await itemsService.createTask(db, listId, nextTitle, null, {
+        note: composerNote,
+        dueDate: composerDueDate.trim() || null,
+        recurrenceType: composerRecurrenceType,
+        recurrenceInterval: Number.parseInt(composerRecurrenceInterval, 10) || 1,
+        recurrenceUnit: composerRecurrenceUnit,
+      });
     }
     setNewTaskTitle('');
+    setComposerNote('');
+    setComposerDueDate('');
+    setComposerRecurrenceType('none');
+    setComposerRecurrenceInterval('1');
+    setComposerRecurrenceUnit('weeks');
+    setShowComposerDetails(false);
     setNewTaskError(null);
     await loadData();
-  }, [db, isShoppingList, list?.type, listId, loadData, newTaskTitle]);
+  }, [
+    composerDueDate,
+    composerNote,
+    composerRecurrenceInterval,
+    composerRecurrenceType,
+    composerRecurrenceUnit,
+    db,
+    isShoppingList,
+    list?.type,
+    listId,
+    loadData,
+    newTaskTitle,
+  ]);
 
   const handleCreateChildTask = useCallback(
     async (parentId: string) => {
@@ -189,20 +296,32 @@ export function ListDetailsScreen() {
 
   const handleRename = useCallback(
     async (itemId: string) => {
-      const nextTitle = editingTitle.trim();
+      const nextTitle = editingDraft.title.trim();
       if (!nextTitle) {
         setEditingError('Tytul nie moze byc pusty.');
         return;
       }
 
-      await itemsService.rename(db, itemId, nextTitle);
+      if (editingDraft.dueDate.trim() && !isValidDateKey(editingDraft.dueDate.trim())) {
+        setEditingError('Data zadania musi miec format YYYY-MM-DD.');
+        return;
+      }
+
+      await itemsService.updateDetails(db, itemId, {
+        title: nextTitle,
+        note: editingDraft.note,
+        dueDate: editingDraft.dueDate.trim() || null,
+        recurrenceType: editingDraft.recurrenceType,
+        recurrenceInterval: Number.parseInt(editingDraft.recurrenceInterval, 10) || 1,
+        recurrenceUnit: editingDraft.recurrenceUnit,
+      });
       setEditingItemId(null);
-      setEditingTitle('');
+      setEditingDraft(buildEditorState());
       setEditingError(null);
       setSelectedItemId(null);
       await loadData();
     },
-    [db, editingTitle, loadData]
+    [db, editingDraft, loadData]
   );
 
   const handleToggleMyDay = useCallback(
@@ -301,6 +420,85 @@ export function ListDetailsScreen() {
           disabled={!newTaskTitle.trim()}
           onPress={() => void handleCreateRootTask()}
         />
+        {!isShoppingList ? (
+          <>
+            <PrimaryButton
+              label={showComposerDetails ? 'Ukryj szczegoly zadania' : 'Dodaj note i termin'}
+              tone="muted"
+              onPress={() => setShowComposerDetails((current) => !current)}
+            />
+            {showComposerDetails ? (
+              <View style={styles.detailsEditor}>
+                <TextInput
+                  value={composerNote}
+                  onChangeText={setComposerNote}
+                  style={[styles.input, styles.noteInput]}
+                  placeholder="Notatka do zadania"
+                  placeholderTextColor={ui.colors.textSoft}
+                  multiline
+                  textAlignVertical="top"
+                />
+                <TextInput
+                  value={composerDueDate}
+                  onChangeText={setComposerDueDate}
+                  style={styles.input}
+                  placeholder="Termin YYYY-MM-DD"
+                  placeholderTextColor={ui.colors.textSoft}
+                  autoCapitalize="none"
+                />
+                <View style={styles.scheduleRow}>
+                  <PrimaryButton
+                    label="Dzisiaj"
+                    tone={composerDueDate === todayKey() ? 'primary' : 'muted'}
+                    onPress={() => setComposerDueDate(todayKey())}
+                  />
+                  <PrimaryButton
+                    label="Jutro"
+                    tone={composerDueDate === dateKeyWithOffset(1) ? 'primary' : 'muted'}
+                    onPress={() => setComposerDueDate(dateKeyWithOffset(1))}
+                  />
+                  <PrimaryButton
+                    label="Bez daty"
+                    tone={!composerDueDate ? 'primary' : 'muted'}
+                    onPress={() => setComposerDueDate('')}
+                  />
+                </View>
+                <View style={styles.scheduleRow}>
+                  {recurrenceOptions.map((option) => (
+                    <PrimaryButton
+                      key={`composer-${option}`}
+                      label={recurrenceLabels[option]}
+                      tone={composerRecurrenceType === option ? 'primary' : 'muted'}
+                      onPress={() => setComposerRecurrenceType(option)}
+                    />
+                  ))}
+                </View>
+                {composerRecurrenceType === 'custom' ? (
+                  <View style={styles.scheduleRow}>
+                    <TextInput
+                      value={composerRecurrenceInterval}
+                      onChangeText={(value) =>
+                        setComposerRecurrenceInterval(value.replace(/[^0-9]/g, ''))
+                      }
+                      style={[styles.input, styles.intervalInput]}
+                      placeholder="Interwal"
+                      placeholderTextColor={ui.colors.textSoft}
+                      keyboardType="number-pad"
+                    />
+                    {(['days', 'weeks', 'months'] as RecurrenceUnit[]).map((unit) => (
+                      <PrimaryButton
+                        key={`composer-${unit}`}
+                        label={unit === 'days' ? 'Dni' : unit === 'weeks' ? 'Tygodnie' : 'Miesiace'}
+                        tone={composerRecurrenceUnit === unit ? 'primary' : 'muted'}
+                        onPress={() => setComposerRecurrenceUnit(unit)}
+                      />
+                    ))}
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+          </>
+        ) : null}
       </View>
 
       {!isShoppingList && expandableIds.length > 0 ? (
@@ -391,9 +589,12 @@ export function ListDetailsScreen() {
                 <View style={styles.itemContent}>
                   {isEditing ? (
                     <TextInput
-                      value={editingTitle}
+                      value={editingDraft.title}
                       onChangeText={(value) => {
-                        setEditingTitle(value);
+                        setEditingDraft((current) => ({
+                          ...current,
+                          title: value,
+                        }));
                         if (value.trim()) {
                           setEditingError(null);
                         }
@@ -420,6 +621,19 @@ export function ListDetailsScreen() {
                             ? `Moj dzien: ${item.myDayDate}`
                             : 'Poza Moim dniem'}
                       </Text>
+                      {item.dueDate ? (
+                        <Text style={styles.itemMeta}>
+                          Termin: {isValidDateKey(item.dueDate) ? formatDateLabel(item.dueDate) : item.dueDate}
+                        </Text>
+                      ) : null}
+                      {getRecurrenceSummary(item) ? (
+                        <Text style={styles.itemMeta}>{getRecurrenceSummary(item)}</Text>
+                      ) : null}
+                      {item.note ? (
+                        <Text style={styles.itemNote} numberOfLines={2}>
+                          {item.note}
+                        </Text>
+                      ) : null}
                       {!isShoppingList && item.parentId ? (
                         <Text style={styles.itemHint}>Subtask</Text>
                       ) : null}
@@ -467,12 +681,16 @@ export function ListDetailsScreen() {
                         active={isInMyDay}
                       />
                     ) : null}
+                    <IconButton
+                      icon="magnify"
+                      onPress={() => navigation.navigate('TaskPreview', { itemId: item.id })}
+                    />
                       {!isEditing ? (
                         <IconButton
                           icon="pencil-outline"
                           onPress={() => {
                             setEditingItemId(item.id);
-                            setEditingTitle(item.title);
+                            setEditingDraft(buildEditorState(item));
                             setEditingError(null);
                           }}
                         />
@@ -487,7 +705,7 @@ export function ListDetailsScreen() {
                             icon="close"
                             onPress={() => {
                               setEditingItemId(null);
-                              setEditingTitle('');
+                              setEditingDraft(buildEditorState());
                               setEditingError(null);
                               setSelectedItemId(null);
                             }}
@@ -512,6 +730,114 @@ export function ListDetailsScreen() {
                         tone={item.myDayDate === tomorrowDateKey ? 'primary' : 'muted'}
                         onPress={() => void handleSetMyDayDate(item, tomorrowDateKey)}
                       />
+                    </View>
+                  ) : null}
+                  {isEditing && !isShoppingList ? (
+                    <View style={styles.detailsEditor}>
+                      <TextInput
+                        value={editingDraft.note}
+                        onChangeText={(value) =>
+                          setEditingDraft((current) => ({
+                            ...current,
+                            note: value,
+                          }))
+                        }
+                        style={[styles.input, styles.noteInput]}
+                        placeholder="Notatka do zadania"
+                        placeholderTextColor={ui.colors.textSoft}
+                        multiline
+                        textAlignVertical="top"
+                      />
+                      <TextInput
+                        value={editingDraft.dueDate}
+                        onChangeText={(value) =>
+                          setEditingDraft((current) => ({
+                            ...current,
+                            dueDate: value,
+                          }))
+                        }
+                        style={styles.input}
+                        placeholder="Termin YYYY-MM-DD"
+                        placeholderTextColor={ui.colors.textSoft}
+                        autoCapitalize="none"
+                      />
+                      <View style={styles.scheduleRow}>
+                        <PrimaryButton
+                          label="Dzisiaj"
+                          tone={editingDraft.dueDate === todayDateKey ? 'primary' : 'muted'}
+                          onPress={() =>
+                            setEditingDraft((current) => ({
+                              ...current,
+                              dueDate: todayDateKey,
+                            }))
+                          }
+                        />
+                        <PrimaryButton
+                          label="Jutro"
+                          tone={editingDraft.dueDate === tomorrowDateKey ? 'primary' : 'muted'}
+                          onPress={() =>
+                            setEditingDraft((current) => ({
+                              ...current,
+                              dueDate: tomorrowDateKey,
+                            }))
+                          }
+                        />
+                        <PrimaryButton
+                          label="Bez daty"
+                          tone={!editingDraft.dueDate ? 'primary' : 'muted'}
+                          onPress={() =>
+                            setEditingDraft((current) => ({
+                              ...current,
+                              dueDate: '',
+                            }))
+                          }
+                        />
+                      </View>
+                      <View style={styles.scheduleRow}>
+                        {recurrenceOptions.map((option) => (
+                          <PrimaryButton
+                            key={`${item.id}-${option}`}
+                            label={recurrenceLabels[option]}
+                            tone={editingDraft.recurrenceType === option ? 'primary' : 'muted'}
+                            onPress={() =>
+                              setEditingDraft((current) => ({
+                                ...current,
+                                recurrenceType: option,
+                              }))
+                            }
+                          />
+                        ))}
+                      </View>
+                      {editingDraft.recurrenceType === 'custom' ? (
+                        <View style={styles.scheduleRow}>
+                          <TextInput
+                            value={editingDraft.recurrenceInterval}
+                            onChangeText={(value) =>
+                              setEditingDraft((current) => ({
+                                ...current,
+                                recurrenceInterval: value.replace(/[^0-9]/g, ''),
+                              }))
+                            }
+                            style={[styles.input, styles.intervalInput]}
+                            placeholder="Interwal"
+                            placeholderTextColor={ui.colors.textSoft}
+                            keyboardType="number-pad"
+                          />
+                          {(['days', 'weeks', 'months'] as RecurrenceUnit[]).map((unit) => (
+                            <PrimaryButton
+                              key={`${item.id}-${unit}`}
+                              label={unit === 'days' ? 'Dni' : unit === 'weeks' ? 'Tygodnie' : 'Miesiace'}
+                              tone={editingDraft.recurrenceUnit === unit ? 'primary' : 'muted'}
+                              onPress={() =>
+                                setEditingDraft((current) => ({
+                                  ...current,
+                                  recurrenceUnit: unit,
+                                }))
+                              }
+                            />
+                          ))}
+                        </View>
+                      ) : null}
                     </View>
                   ) : null}
                 </View>
@@ -596,9 +922,12 @@ export function ListDetailsScreen() {
                     <View style={styles.itemContent}>
                       {isEditing ? (
                         <TextInput
-                          value={editingTitle}
+                          value={editingDraft.title}
                           onChangeText={(value) => {
-                            setEditingTitle(value);
+                            setEditingDraft((current) => ({
+                              ...current,
+                              title: value,
+                            }));
                             if (value.trim()) {
                               setEditingError(null);
                             }
@@ -625,10 +954,16 @@ export function ListDetailsScreen() {
                       <View style={styles.iconCluster}>
                         {!isEditing ? (
                           <IconButton
+                            icon="magnify"
+                            onPress={() => navigation.navigate('TaskPreview', { itemId: item.id })}
+                          />
+                        ) : null}
+                        {!isEditing ? (
+                          <IconButton
                             icon="pencil-outline"
                             onPress={() => {
                               setEditingItemId(item.id);
-                              setEditingTitle(item.title);
+                              setEditingDraft(buildEditorState(item));
                               setEditingError(null);
                             }}
                           />
@@ -643,7 +978,7 @@ export function ListDetailsScreen() {
                               icon="close"
                               onPress={() => {
                                 setEditingItemId(null);
-                                setEditingTitle('');
+                                setEditingDraft(buildEditorState());
                                 setEditingError(null);
                                 setSelectedItemId(null);
                               }}
@@ -713,6 +1048,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     backgroundColor: ui.colors.input,
     color: ui.colors.text,
+  },
+  noteInput: {
+    minHeight: 94,
+    paddingTop: 14,
+  },
+  intervalInput: {
+    minWidth: 100,
+    flexGrow: 0,
   },
   inputHint: {
     color: ui.colors.textMuted,
@@ -804,6 +1147,11 @@ const styles = StyleSheet.create({
     color: ui.colors.textMuted,
     fontSize: 13,
   },
+  itemNote: {
+    color: ui.colors.text,
+    fontSize: 13,
+    lineHeight: 18,
+  },
   itemHint: {
     color: ui.colors.accent,
     fontSize: 12,
@@ -817,6 +1165,10 @@ const styles = StyleSheet.create({
   childComposer: {
     gap: 8,
     paddingTop: 2,
+  },
+  detailsEditor: {
+    gap: 8,
+    paddingTop: 4,
   },
   scheduleRow: {
     flexDirection: 'row',

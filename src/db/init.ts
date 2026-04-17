@@ -21,7 +21,11 @@ export async function initDatabase(db: SQLiteDatabase) {
       parentId TEXT,
       type TEXT NOT NULL,
       title TEXT NOT NULL,
+      note TEXT,
       status TEXT NOT NULL,
+      dueDate TEXT,
+      recurrenceType TEXT NOT NULL DEFAULT 'none',
+      recurrenceConfig TEXT,
       myDayDate TEXT,
       position REAL NOT NULL,
       createdAt TEXT NOT NULL,
@@ -41,5 +45,35 @@ export async function initDatabase(db: SQLiteDatabase) {
     CREATE INDEX IF NOT EXISTS idx_items_deletedAt ON items(deletedAt);
     CREATE INDEX IF NOT EXISTS idx_items_myDayDate ON items(myDayDate);
     CREATE INDEX IF NOT EXISTS idx_items_position ON items(position);
+  `);
+
+  await ensureItemsColumns(db);
+  await ensureItemsIndexes(db);
+}
+
+async function ensureItemsColumns(db: SQLiteDatabase) {
+  const columns = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(items)`);
+  const columnNames = new Set(columns.map((column) => column.name));
+
+  if (!columnNames.has('note')) {
+    await db.execAsync(`ALTER TABLE items ADD COLUMN note TEXT;`);
+  }
+
+  if (!columnNames.has('dueDate')) {
+    await db.execAsync(`ALTER TABLE items ADD COLUMN dueDate TEXT;`);
+  }
+
+  if (!columnNames.has('recurrenceType')) {
+    await db.execAsync(`ALTER TABLE items ADD COLUMN recurrenceType TEXT NOT NULL DEFAULT 'none';`);
+  }
+
+  if (!columnNames.has('recurrenceConfig')) {
+    await db.execAsync(`ALTER TABLE items ADD COLUMN recurrenceConfig TEXT;`);
+  }
+}
+
+async function ensureItemsIndexes(db: SQLiteDatabase) {
+  await db.execAsync(`
+    CREATE INDEX IF NOT EXISTS idx_items_dueDate ON items(dueDate);
   `);
 }

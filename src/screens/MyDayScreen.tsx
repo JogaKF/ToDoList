@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { IconButton } from '../components/common/IconButton';
 import { PrimaryButton } from '../components/common/PrimaryButton';
@@ -17,15 +18,19 @@ import type { Item, ItemTreeNode } from '../features/items/types';
 import type { TodoList } from '../features/lists/types';
 import { ui } from '../theme/ui';
 import { dateKeyWithOffset, formatDateLabel, todayKey } from '../utils/date';
+import type { RootStackParamList } from '../app/navigation/types';
 
 type GroupedItems = {
   list: TodoList | undefined;
   tree: ItemTreeNode[];
 };
 
+type Navigation = NativeStackNavigationProp<RootStackParamList>;
+
 export function MyDayScreen() {
   const db = useAppDatabase();
   const tabBarHeight = useBottomTabBarHeight();
+  const navigation = useNavigation<Navigation>();
   const { expandedIds, toggleExpanded, expandMany } = useTreeUiStore();
   const t = useI18n();
   const [items, setItems] = useState<Item[]>([]);
@@ -163,6 +168,10 @@ export function MyDayScreen() {
                   </Text>
                 </View>
                 <IconButton
+                  icon="magnify"
+                  onPress={() => navigation.navigate('TaskPreview', { itemId: item.id })}
+                />
+                <IconButton
                   icon="weather-sunset-down"
                   tone="danger"
                   onPress={() => {
@@ -213,6 +222,10 @@ export function MyDayScreen() {
                           {item.parentId ? 'Subtask' : 'Glowny task'} | {item.status}
                         </Text>
                       </View>
+                      <IconButton
+                        icon="magnify"
+                        onPress={() => navigation.navigate('TaskPreview', { itemId: item.id })}
+                      />
                       <IconButton
                         icon="weather-sunny"
                         onPress={() => {

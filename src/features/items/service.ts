@@ -3,10 +3,37 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { itemsRepository } from '../../db/repositories/itemsRepository';
 import { todayKey } from '../../utils/date';
 
-import type { Item } from './types';
+import type { Item, RecurrenceConfig, RecurrenceType, RecurrenceUnit } from './types';
 import { buildItemTree } from './tree';
 
+type TaskDetailsInput = {
+  note?: string | null;
+  dueDate?: string | null;
+  recurrenceType?: RecurrenceType;
+  recurrenceInterval?: number;
+  recurrenceUnit?: RecurrenceUnit;
+};
+
+function serializeRecurrenceConfig(input: TaskDetailsInput) {
+  if (input.recurrenceType !== 'custom') {
+    return null;
+  }
+
+  const interval = Math.max(1, input.recurrenceInterval ?? 1);
+  const unit = input.recurrenceUnit ?? 'weeks';
+  const config: RecurrenceConfig = {
+    interval,
+    unit,
+  };
+
+  return JSON.stringify(config);
+}
+
 export const itemsService = {
+  getById(db: SQLiteDatabase, itemId: string) {
+    return itemsRepository.getById(db, itemId);
+  },
+
   async getListTree(db: SQLiteDatabase, listId: string) {
     const items = await itemsRepository.getByListId(db, listId);
     return buildItemTree(items);
@@ -20,12 +47,22 @@ export const itemsService = {
     return itemsRepository.getDeleted(db);
   },
 
-  createTask(db: SQLiteDatabase, listId: string, title: string, parentId?: string | null) {
+  createTask(
+    db: SQLiteDatabase,
+    listId: string,
+    title: string,
+    parentId?: string | null,
+    details?: TaskDetailsInput
+  ) {
     return itemsRepository.create(db, {
       listId,
       title,
       parentId: parentId ?? null,
       type: 'task',
+      note: details?.note ?? null,
+      dueDate: details?.dueDate ?? null,
+      recurrenceType: details?.recurrenceType ?? 'none',
+      recurrenceConfig: serializeRecurrenceConfig(details ?? {}),
     });
   },
 
@@ -56,6 +93,27 @@ export const itemsService = {
 
   rename(db: SQLiteDatabase, itemId: string, title: string) {
     return itemsRepository.updateTitle(db, itemId, title);
+  },
+
+  updateDetails(
+    db: SQLiteDatabase,
+    itemId: string,
+    input: {
+      title: string;
+      note: string | null;
+      dueDate: string | null;
+      recurrenceType: RecurrenceType;
+      recurrenceInterval?: number;
+      recurrenceUnit?: RecurrenceUnit;
+    }
+  ) {
+    return itemsRepository.updateDetails(db, itemId, {
+      title: input.title,
+      note: input.note,
+      dueDate: input.dueDate,
+      recurrenceType: input.recurrenceType,
+      recurrenceConfig: serializeRecurrenceConfig(input),
+    });
   },
 
   moveWithinSiblings(db: SQLiteDatabase, item: Item, direction: 'up' | 'down') {

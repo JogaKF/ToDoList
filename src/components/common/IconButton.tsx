@@ -17,6 +17,7 @@ const ICON_MAP = {
   add: '+',
   indent: '⇢',
   outdent: '⇠',
+  magnify: '⌕',
 } as const;
 
 type IconName = keyof typeof ICON_MAP;
