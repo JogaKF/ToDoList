@@ -13,8 +13,14 @@ export type MyDayStackParamList = {
   TaskPreview: TaskPreviewParams;
 };
 
+export type PlannerStackParamList = {
+  PlannerHome: undefined;
+  TaskPreview: TaskPreviewParams;
+};
+
 export type HomeTabParamList = {
   Lists: undefined;
+  Planner: undefined;
   MyDay: undefined;
   Trash: undefined;
   Settings: undefined;

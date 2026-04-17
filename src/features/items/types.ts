@@ -24,11 +24,19 @@ export type Item = {
   recurrenceConfig: string | null;
   recurrenceOriginId: string | null;
   previousRecurringItemId: string | null;
+  recurrenceIsException: number;
   myDayDate: string | null;
   position: number;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
+};
+
+export type SeriesEditScope = 'single' | 'series';
+
+export type PlannedTask = Item & {
+  listName: string;
+  plannedDate: string | null;
 };
 
 export type ItemTreeNode = Item & {

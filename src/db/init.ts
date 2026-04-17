@@ -31,6 +31,7 @@ export async function initDatabase(db: SQLiteDatabase) {
       recurrenceConfig TEXT,
       recurrenceOriginId TEXT,
       previousRecurringItemId TEXT,
+      recurrenceIsException INTEGER NOT NULL DEFAULT 0,
       myDayDate TEXT,
       position REAL NOT NULL,
       createdAt TEXT NOT NULL,
@@ -94,6 +95,10 @@ async function ensureItemsColumns(db: SQLiteDatabase) {
 
   if (!columnNames.has('previousRecurringItemId')) {
     await db.execAsync(`ALTER TABLE items ADD COLUMN previousRecurringItemId TEXT;`);
+  }
+
+  if (!columnNames.has('recurrenceIsException')) {
+    await db.execAsync(`ALTER TABLE items ADD COLUMN recurrenceIsException INTEGER NOT NULL DEFAULT 0;`);
   }
 }
 

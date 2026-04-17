@@ -77,7 +77,7 @@ export function SettingsScreen() {
   const [panel, setPanel] = useState(customColors.panel);
   const [primary, setPrimary] = useState(customColors.primary);
 
-  const startTabOptions: StartTab[] = ['Lists', 'MyDay', 'Trash', 'Settings'];
+  const startTabOptions: StartTab[] = ['Lists', 'Planner', 'MyDay', 'Trash', 'Settings'];
   const shoppingSortOptions: ShoppingSortPreference[] = ['manual', 'alpha'];
   const shoppingGroupOptions: ShoppingGroupPreference[] = ['flat', 'unit', 'category'];
 
@@ -163,6 +163,8 @@ export function SettingsScreen() {
                   `settings_start_${
                     option === 'Lists'
                       ? 'lists'
+                      : option === 'Planner'
+                        ? 'planner'
                       : option === 'MyDay'
                         ? 'my_day'
                         : option === 'Trash'

@@ -5,7 +5,7 @@ import { settingsRepository } from '../../db/repositories/settingsRepository';
 import { applyTheme, buildCustomTheme, themePresets, type ThemeColors, type ThemeId } from '../../theme/ui';
 
 type Language = 'pl' | 'en';
-export type StartTab = 'Lists' | 'MyDay' | 'Trash' | 'Settings';
+export type StartTab = 'Lists' | 'Planner' | 'MyDay' | 'Trash' | 'Settings';
 export type ShoppingSortPreference = 'manual' | 'alpha';
 export type ShoppingGroupPreference = 'flat' | 'unit' | 'category';
 
@@ -35,6 +35,7 @@ type PreferencesContextValue = {
 const translations = {
   pl: {
     tab_lists: 'Listy',
+    tab_planner: 'Planner',
     tab_my_day: 'Moj dzien',
     tab_trash: 'Kosz',
     tab_settings: 'Ustawienia',
@@ -67,6 +68,7 @@ const translations = {
     settings_show_completed_hint: 'Kontroluje sekcje zakonczonych zadan i zakupow.',
     settings_start_tab: 'Ekran startowy',
     settings_start_lists: 'Listy',
+    settings_start_planner: 'Planner',
     settings_start_my_day: 'Moj dzien',
     settings_start_trash: 'Kosz',
     settings_start_settings: 'Ustawienia',
@@ -104,6 +106,9 @@ const translations = {
     my_day_loading_hint: 'Zbieram z lokalnej bazy wszystko, co przypisales do wybranego dnia.',
     my_day_empty: 'Brak zadan na wybrany dzien',
     my_day_empty_hint: 'Otworz dowolna liste i zaplanuj zadanie na dzis albo jutro bez internetu.',
+    planner_title: 'Planner',
+    planner_intro: 'Przegladaj terminy, Moj dzien i zadania bez daty z jednego offline widoku.',
+    planner_eyebrow: 'Local planning grid',
     trash_loading: 'Laduje kosz',
     trash_loading_hint: 'Sprawdzam lokalnie, co mozna jeszcze przywrocic.',
     trash_empty: 'Kosz jest pusty',
@@ -128,6 +133,7 @@ const translations = {
   },
   en: {
     tab_lists: 'Lists',
+    tab_planner: 'Planner',
     tab_my_day: 'My Day',
     tab_trash: 'Trash',
     tab_settings: 'Settings',
@@ -160,6 +166,7 @@ const translations = {
     settings_show_completed_hint: 'Controls completed sections for tasks and shopping items.',
     settings_start_tab: 'Start screen',
     settings_start_lists: 'Lists',
+    settings_start_planner: 'Planner',
     settings_start_my_day: 'My Day',
     settings_start_trash: 'Trash',
     settings_start_settings: 'Settings',
@@ -197,6 +204,9 @@ const translations = {
     my_day_loading_hint: 'I am gathering everything assigned to the selected day from local storage.',
     my_day_empty: 'No tasks for the selected day',
     my_day_empty_hint: 'Open any list and plan a task for today or tomorrow, offline.',
+    planner_title: 'Planner',
+    planner_intro: 'Review due dates, My Day items and unscheduled tasks from one offline view.',
+    planner_eyebrow: 'Local planning grid',
     trash_loading: 'Loading trash',
     trash_loading_hint: 'Checking locally what can still be restored.',
     trash_empty: 'Trash is empty',
@@ -263,7 +273,7 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
       const nextThemeId = (values.themeId as ThemeId) || 'cyber';
       const nextShowCompleted = values.showCompleted !== 'false';
       const nextStartTab =
-        values.startTab === 'MyDay' || values.startTab === 'Trash' || values.startTab === 'Settings'
+        values.startTab === 'Planner' || values.startTab === 'MyDay' || values.startTab === 'Trash' || values.startTab === 'Settings'
           ? (values.startTab as StartTab)
           : 'Lists';
       const nextShoppingSortMode = values.shoppingSortMode === 'alpha' ? 'alpha' : 'manual';

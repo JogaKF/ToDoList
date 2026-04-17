@@ -3,8 +3,9 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { itemsRepository } from '../../db/repositories/itemsRepository';
 import { todayKey } from '../../utils/date';
 
-import type { Item, RecurrenceConfig, RecurrenceType, RecurrenceUnit } from './types';
+import type { Item, PlannedTask, RecurrenceConfig, RecurrenceType, RecurrenceUnit, SeriesEditScope } from './types';
 import { buildItemTree } from './tree';
+import { getUpcomingRecurringDates } from '../../utils/recurrence';
 
 type TaskDetailsInput = {
   category?: string | null;
@@ -120,7 +121,8 @@ export const itemsService = {
       recurrenceType: RecurrenceType;
       recurrenceInterval?: number;
       recurrenceUnit?: RecurrenceUnit;
-    }
+    },
+    scope: SeriesEditScope = 'single'
   ) {
     return itemsRepository.updateDetails(db, itemId, {
       title: input.title,
@@ -131,7 +133,27 @@ export const itemsService = {
       dueDate: input.dueDate,
       recurrenceType: input.recurrenceType,
       recurrenceConfig: serializeRecurrenceConfig(input),
-    });
+    }, scope);
+  },
+
+  updateDueDate(db: SQLiteDatabase, itemId: string, dueDate: string | null, scope: SeriesEditScope = 'single') {
+    return itemsRepository.updateDueDate(db, itemId, dueDate, scope);
+  },
+
+  updateDueDateMany(db: SQLiteDatabase, itemIds: string[], dueDate: string | null) {
+    return itemsRepository.updateDueDateMany(db, itemIds, dueDate);
+  },
+
+  getPlannedTasks(db: SQLiteDatabase, mode: 'due' | 'myday') {
+    return itemsRepository.getPlannedTasks(db, mode);
+  },
+
+  getTasksWithoutDate(db: SQLiteDatabase) {
+    return itemsRepository.getTasksWithoutDate(db);
+  },
+
+  getRecurringPreview(item: Pick<Item, 'dueDate' | 'recurrenceType' | 'recurrenceConfig'>, count = 4) {
+    return getUpcomingRecurringDates(item.dueDate, item.recurrenceType, item.recurrenceConfig, count);
   },
 
   moveWithinSiblings(db: SQLiteDatabase, item: Item, direction: 'up' | 'down') {

@@ -7,16 +7,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useI18n, usePreferences, useTheme } from '../providers/PreferencesProvider';
 import { ListsScreen } from '../../screens/ListsScreen';
 import { ListDetailsScreen } from '../../screens/ListDetailsScreen';
+import { PlannerScreen } from '../../screens/PlannerScreen';
 import { MyDayScreen } from '../../screens/MyDayScreen';
 import { TrashScreen } from '../../screens/TrashScreen';
 import { SettingsScreen } from '../../screens/SettingsScreen';
 import { TaskPreviewScreen } from '../../screens/TaskPreviewScreen';
 
-import type { HomeTabParamList, ListsStackParamList, MyDayStackParamList } from './types';
+import type { HomeTabParamList, ListsStackParamList, MyDayStackParamList, PlannerStackParamList } from './types';
 
 const HomeTabs = createBottomTabNavigator<HomeTabParamList>();
 const ListsStack = createNativeStackNavigator<ListsStackParamList>();
 const MyDayStack = createNativeStackNavigator<MyDayStackParamList>();
+const PlannerStack = createNativeStackNavigator<PlannerStackParamList>();
 
 function ListsStackNavigator() {
   const t = useI18n();
@@ -89,6 +91,39 @@ function MyDayStackNavigator() {
   );
 }
 
+function PlannerStackNavigator() {
+  const t = useI18n();
+  const theme = useTheme();
+
+  return (
+    <PlannerStack.Navigator
+      screenOptions={{
+        headerStyle: {
+          backgroundColor: theme.panel,
+        },
+        headerTintColor: theme.text,
+        headerTitleStyle: {
+          fontWeight: '800',
+        },
+        contentStyle: {
+          backgroundColor: theme.background,
+        },
+      }}
+    >
+      <PlannerStack.Screen
+        name="PlannerHome"
+        component={PlannerScreen}
+        options={{ headerShown: false }}
+      />
+      <PlannerStack.Screen
+        name="TaskPreview"
+        component={TaskPreviewScreen}
+        options={{ title: t('task_details_title') }}
+      />
+    </PlannerStack.Navigator>
+  );
+}
+
 function HomeTabsNavigator() {
   const insets = useSafeAreaInsets();
   const t = useI18n();
@@ -136,6 +171,7 @@ function HomeTabsNavigator() {
       }}
     >
       <HomeTabs.Screen name="Lists" component={ListsStackNavigator} options={{ title: t('tab_lists') }} />
+      <HomeTabs.Screen name="Planner" component={PlannerStackNavigator} options={{ title: t('tab_planner') }} />
       <HomeTabs.Screen name="MyDay" component={MyDayStackNavigator} options={{ title: t('tab_my_day') }} />
       <HomeTabs.Screen name="Trash" component={TrashScreen} options={{ title: t('tab_trash') }} />
       <HomeTabs.Screen name="Settings" component={SettingsScreen} options={{ title: t('tab_settings') }} />

@@ -12,7 +12,7 @@ import { useRecovery } from '../app/providers/RecoveryProvider';
 import { useI18n } from '../app/providers/PreferencesProvider';
 import { useAppDatabase } from '../db/sqlite';
 import { itemsService } from '../features/items/service';
-import type { Item, RecurrenceType, RecurrenceUnit } from '../features/items/types';
+import type { Item, RecurrenceType, RecurrenceUnit, SeriesEditScope } from '../features/items/types';
 import { ui } from '../theme/ui';
 import { dateKeyWithOffset, formatDateLabel, todayKey } from '../utils/date';
 
@@ -141,6 +141,7 @@ export function TaskPreviewScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [saveScope, setSaveScope] = useState<SeriesEditScope>('single');
 
   const loadItem = useCallback(async () => {
     setIsLoading(true);
@@ -184,6 +185,10 @@ export function TaskPreviewScreen() {
   }, [item?.myDayDate]);
 
   const isTask = item?.type === 'task';
+  const recurringPreview = useMemo(
+    () => (item ? itemsService.getRecurringPreview(item, 4) : []),
+    [item]
+  );
 
   const handleSave = useCallback(async () => {
     if (!item) {
@@ -214,12 +219,12 @@ export function TaskPreviewScreen() {
       recurrenceType: isTask ? draft.recurrenceType : 'none',
       recurrenceInterval: Number.parseInt(draft.recurrenceInterval, 10) || 1,
       recurrenceUnit: draft.recurrenceUnit,
-    });
+    }, saveScope);
     await loadItem();
     setIsSaving(false);
     setErrorMessage(null);
-    setSaveMessage('Zmiany zapisaly sie lokalnie.');
-  }, [db, draft, isTask, item, loadItem]);
+    setSaveMessage(saveScope === 'series' ? 'Zmiany zapisaly sie dla calej serii.' : 'Zmiany zapisaly sie lokalnie.');
+  }, [db, draft, isTask, item, loadItem, saveScope]);
 
   const handleReset = useCallback(() => {
     setDraft(buildEditorState(item));
@@ -293,9 +298,9 @@ export function TaskPreviewScreen() {
               {item.status === 'done' ? 'Zrobione' : 'Otwarte'} | {item.type === 'shopping' ? 'Zakupy' : 'Task'}
             </Text>
             <Text style={styles.supportingMeta}>
-              {item.type === 'shopping'
+            {item.type === 'shopping'
                 ? formatShoppingSummary(item)
-                : `${dueDateLabel} • ${getRecurrenceSummary(item)}`}
+                : `${dueDateLabel} • ${getRecurrenceSummary(item)}${item.recurrenceIsException ? ' • Wyjatek serii' : ''}`}
             </Text>
           </View>
 
@@ -552,6 +557,29 @@ export function TaskPreviewScreen() {
                     </View>
                   </View>
                 ) : null}
+
+                {(item.recurrenceType !== 'none' || draft.recurrenceType !== 'none') ? (
+                  <>
+                    <Text style={styles.detailLabel}>Zakres zapisu</Text>
+                    <View style={styles.actionsWrap}>
+                      <PrimaryButton
+                        label="Tylko to wystapienie"
+                        tone={saveScope === 'single' ? 'primary' : 'muted'}
+                        onPress={() => setSaveScope('single')}
+                      />
+                      <PrimaryButton
+                        label="Cala seria"
+                        tone={saveScope === 'series' ? 'primary' : 'muted'}
+                        onPress={() => setSaveScope('series')}
+                      />
+                    </View>
+                    <Text style={styles.scopeHint}>
+                      {item.recurrenceIsException
+                        ? 'To zadanie jest juz wyjatkiem w swojej serii.'
+                        : 'Mozesz zmienic tylko to wystapienie albo od razu cala serie.'}
+                    </Text>
+                  </>
+                ) : null}
               </>
             )}
           </View>
@@ -566,6 +594,16 @@ export function TaskPreviewScreen() {
               <Text style={styles.detailLabel}>Powtarzanie</Text>
               <Text style={styles.detailValue}>{getRecurrenceSummary(item)}</Text>
             </View>
+            {item.recurrenceType !== 'none' ? (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Kolejne wystapienia</Text>
+                <Text style={styles.detailValue}>
+                  {recurringPreview.length > 0
+                    ? recurringPreview.map((dateKey) => formatDateLabel(dateKey)).join(' • ')
+                    : 'Brak kolejnych wystapien'}
+                </Text>
+              </View>
+            ) : null}
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Moj dzien</Text>
               <Text style={styles.detailValue}>{myDayLabel}</Text>
@@ -666,6 +704,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
+  },
+  scopeHint: {
+    color: ui.colors.textMuted,
+    fontSize: 13,
+    lineHeight: 18,
   },
   successText: {
     color: '#8BE3B0',

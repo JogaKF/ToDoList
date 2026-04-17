@@ -1,35 +1,10 @@
 import type { RecurrenceType, RecurrenceUnit } from '../features/items/types';
-import { todayKey } from './date';
+import { addDays, addMonths, isValidDateKey, parseDateKey, toDateKey, todayKey } from './date';
 
 type ParsedRecurrenceConfig = {
   interval: number;
   unit: RecurrenceUnit;
 };
-
-function isValidDateKey(value: string | null | undefined) {
-  return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value));
-}
-
-function parseDateKey(dateKey: string) {
-  const [year, month, day] = dateKey.split('-').map(Number);
-  return new Date(Date.UTC(year, month - 1, day));
-}
-
-function toDateKey(date: Date) {
-  return date.toISOString().slice(0, 10);
-}
-
-function addDays(dateKey: string, amount: number) {
-  const next = parseDateKey(dateKey);
-  next.setUTCDate(next.getUTCDate() + amount);
-  return toDateKey(next);
-}
-
-function addMonths(dateKey: string, amount: number) {
-  const next = parseDateKey(dateKey);
-  next.setUTCMonth(next.getUTCMonth() + amount);
-  return toDateKey(next);
-}
 
 function nextWeekday(dateKey: string) {
   let current = addDays(dateKey, 1);
@@ -104,4 +79,25 @@ export function getNextRecurringDate(
   } while (current <= referenceDate);
 
   return current;
+}
+
+export function getUpcomingRecurringDates(
+  dueDate: string | null,
+  recurrenceType: RecurrenceType,
+  recurrenceConfig: string | null,
+  count = 4
+) {
+  if (recurrenceType === 'none') {
+    return [];
+  }
+
+  const result: string[] = [];
+  let current = isValidDateKey(dueDate) ? dueDate! : todayKey();
+
+  for (let index = 0; index < count; index += 1) {
+    current = stepRecurrence(current, recurrenceType, recurrenceConfig);
+    result.push(current);
+  }
+
+  return result;
 }

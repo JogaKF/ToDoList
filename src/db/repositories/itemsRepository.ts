@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import type { DeletedItem, Item, RecurrenceType } from '../../features/items/types';
+import type { DeletedItem, Item, PlannedTask, RecurrenceType, SeriesEditScope } from '../../features/items/types';
 import { createId } from '../../utils/id';
 import { nowIso } from '../../utils/date';
 import { getNextRecurringDate } from '../../utils/recurrence';
@@ -76,6 +76,7 @@ export const itemsRepository = {
       recurrenceConfig: input.recurrenceConfig ?? null,
       recurrenceOriginId: input.recurrenceType && input.recurrenceType !== 'none' ? createId('recurrence') : null,
       previousRecurringItemId: null,
+      recurrenceIsException: 0,
       myDayDate: null,
       position,
       createdAt: timestamp,
@@ -85,8 +86,8 @@ export const itemsRepository = {
 
     await db.runAsync(
       `INSERT INTO items (
-        id, listId, parentId, type, title, category, quantity, unit, note, status, dueDate, recurrenceType, recurrenceConfig, recurrenceOriginId, previousRecurringItemId, myDayDate, position, createdAt, updatedAt, deletedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        id, listId, parentId, type, title, category, quantity, unit, note, status, dueDate, recurrenceType, recurrenceConfig, recurrenceOriginId, previousRecurringItemId, recurrenceIsException, myDayDate, position, createdAt, updatedAt, deletedAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       item.id,
       item.listId,
       item.parentId,
@@ -102,6 +103,7 @@ export const itemsRepository = {
       item.recurrenceConfig,
       item.recurrenceOriginId,
       item.previousRecurringItemId,
+      item.recurrenceIsException,
       item.myDayDate,
       item.position,
       item.createdAt,
@@ -135,28 +137,162 @@ export const itemsRepository = {
       dueDate: string | null;
       recurrenceType: RecurrenceType;
       recurrenceConfig: string | null;
-    }
+    },
+    scope: SeriesEditScope = 'single'
   ) {
+    const currentItem = await this.getById(db, id);
+    if (!currentItem) {
+      return;
+    }
+
+    const title = input.title.trim();
+    const category = input.category?.trim() ? input.category.trim() : null;
+    const quantity = input.quantity?.trim() ? input.quantity.trim() : null;
+    const unit = input.unit?.trim() ? input.unit.trim() : null;
+    const note = input.note?.trim() ? input.note.trim() : null;
+    const timestamp = nowIso();
+    const recurrenceOriginId = currentItem.recurrenceOriginId ?? currentItem.id;
+
+    if (scope === 'series' && currentItem.recurrenceType !== 'none') {
+      await db.runAsync(
+        `UPDATE items
+         SET title = ?, category = ?, quantity = ?, unit = ?, note = ?, dueDate = ?, recurrenceType = ?, recurrenceConfig = ?, recurrenceOriginId = ?, recurrenceIsException = 0, updatedAt = ?
+         WHERE deletedAt IS NULL
+           AND (id = ? OR recurrenceOriginId = ?)`,
+        title,
+        category,
+        quantity,
+        unit,
+        note,
+        input.dueDate,
+        input.recurrenceType,
+        input.recurrenceConfig,
+        input.recurrenceType === 'none' ? null : recurrenceOriginId,
+        timestamp,
+        currentItem.id,
+        recurrenceOriginId
+      );
+
+      if (input.recurrenceType === 'none') {
+        await db.runAsync(
+          `UPDATE items
+           SET previousRecurringItemId = NULL, recurrenceOriginId = NULL, recurrenceIsException = 0, updatedAt = ?
+           WHERE deletedAt IS NULL
+             AND (id = ? OR recurrenceOriginId = ?)`,
+          timestamp,
+          currentItem.id,
+          recurrenceOriginId
+        );
+      }
+
+      return;
+    }
+
     await db.runAsync(
       `UPDATE items
        SET title = ?, category = ?, quantity = ?, unit = ?, note = ?, dueDate = ?, recurrenceType = ?, recurrenceConfig = ?, recurrenceOriginId = CASE
          WHEN ? != 'none' AND recurrenceOriginId IS NULL THEN id
          WHEN ? = 'none' THEN NULL
          ELSE recurrenceOriginId
-       END, updatedAt = ?
+       END, recurrenceIsException = ?, updatedAt = ?
        WHERE id = ?`,
-      input.title.trim(),
-      input.category?.trim() ? input.category.trim() : null,
-      input.quantity?.trim() ? input.quantity.trim() : null,
-      input.unit?.trim() ? input.unit.trim() : null,
-      input.note?.trim() ? input.note.trim() : null,
+      title,
+      category,
+      quantity,
+      unit,
+      note,
       input.dueDate,
       input.recurrenceType,
       input.recurrenceConfig,
       input.recurrenceType,
       input.recurrenceType,
-      nowIso(),
+      currentItem.recurrenceType !== 'none' ? 1 : 0,
+      timestamp,
       id
+    );
+  },
+
+  async updateDueDate(db: SQLiteDatabase, id: string, dueDate: string | null, scope: SeriesEditScope = 'single') {
+    const currentItem = await this.getById(db, id);
+    if (!currentItem) {
+      return;
+    }
+
+    const timestamp = nowIso();
+    const recurrenceOriginId = currentItem.recurrenceOriginId ?? currentItem.id;
+
+    if (scope === 'series' && currentItem.recurrenceType !== 'none') {
+      await db.runAsync(
+        `UPDATE items
+         SET dueDate = ?, recurrenceIsException = 0, updatedAt = ?
+         WHERE deletedAt IS NULL
+           AND (id = ? OR recurrenceOriginId = ?)`,
+        dueDate,
+        timestamp,
+        currentItem.id,
+        recurrenceOriginId
+      );
+      return;
+    }
+
+    await db.runAsync(
+      `UPDATE items
+       SET dueDate = ?, recurrenceIsException = ?, updatedAt = ?
+       WHERE id = ? AND deletedAt IS NULL`,
+      dueDate,
+      currentItem.recurrenceType !== 'none' ? 1 : 0,
+      timestamp,
+      id
+    );
+  },
+
+  async updateDueDateMany(db: SQLiteDatabase, ids: string[], dueDate: string | null) {
+    if (ids.length === 0) {
+      return;
+    }
+
+    const timestamp = nowIso();
+    await db.withExclusiveTransactionAsync(async (txn) => {
+      for (const id of ids) {
+        await txn.runAsync(
+          `UPDATE items
+           SET dueDate = ?, updatedAt = ?
+           WHERE id = ? AND deletedAt IS NULL`,
+          dueDate,
+          timestamp,
+          id
+        );
+      }
+    });
+  },
+
+  async getPlannedTasks(db: SQLiteDatabase, mode: 'due' | 'myday') {
+    const plannedColumn = mode === 'due' ? 'items.dueDate' : 'items.myDayDate';
+
+    return db.getAllAsync<PlannedTask>(
+      `SELECT items.*, lists.name as listName, ${plannedColumn} as plannedDate
+       FROM items
+       INNER JOIN lists ON lists.id = items.listId
+       WHERE items.deletedAt IS NULL
+         AND lists.deletedAt IS NULL
+         AND items.type = 'task'
+         AND items.status = 'todo'
+         AND ${plannedColumn} IS NOT NULL
+       ORDER BY ${plannedColumn} ASC, items.position ASC, items.createdAt ASC`
+    );
+  },
+
+  async getTasksWithoutDate(db: SQLiteDatabase) {
+    return db.getAllAsync<PlannedTask>(
+      `SELECT items.*, lists.name as listName, items.dueDate as plannedDate
+       FROM items
+       INNER JOIN lists ON lists.id = items.listId
+       WHERE items.deletedAt IS NULL
+         AND lists.deletedAt IS NULL
+         AND items.type = 'task'
+         AND items.status = 'todo'
+         AND items.dueDate IS NULL
+       ORDER BY lists.position ASC, items.position ASC, items.createdAt ASC`
     );
   },
 
@@ -295,8 +431,8 @@ export const itemsRepository = {
 
       await db.runAsync(
         `INSERT INTO items (
-          id, listId, parentId, type, title, category, quantity, unit, note, status, dueDate, recurrenceType, recurrenceConfig, recurrenceOriginId, previousRecurringItemId, myDayDate, position, createdAt, updatedAt, deletedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          id, listId, parentId, type, title, category, quantity, unit, note, status, dueDate, recurrenceType, recurrenceConfig, recurrenceOriginId, previousRecurringItemId, recurrenceIsException, myDayDate, position, createdAt, updatedAt, deletedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         newId,
         subtreeItem.listId,
         clonedParentId,
@@ -312,6 +448,7 @@ export const itemsRepository = {
         subtreeItem.recurrenceConfig,
         subtreeItem.recurrenceOriginId ?? item.recurrenceOriginId ?? item.id,
         subtreeItem.id,
+        subtreeItem.recurrenceIsException,
         null,
         isRoot ? rootPosition : subtreeItem.position,
         timestamp,
