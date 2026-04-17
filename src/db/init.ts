@@ -21,6 +21,7 @@ export async function initDatabase(db: SQLiteDatabase) {
       parentId TEXT,
       type TEXT NOT NULL,
       title TEXT NOT NULL,
+      category TEXT,
       quantity TEXT,
       unit TEXT,
       note TEXT,
@@ -65,6 +66,10 @@ async function ensureItemsColumns(db: SQLiteDatabase) {
 
   if (!columnNames.has('quantity')) {
     await db.execAsync(`ALTER TABLE items ADD COLUMN quantity TEXT;`);
+  }
+
+  if (!columnNames.has('category')) {
+    await db.execAsync(`ALTER TABLE items ADD COLUMN category TEXT;`);
   }
 
   if (!columnNames.has('unit')) {

@@ -19,6 +19,7 @@ type Navigation = NativeStackNavigationProp<RootStackParamList, 'TaskPreview'>;
 type PreviewRoute = RouteProp<RootStackParamList, 'TaskPreview'>;
 type TaskEditorState = {
   title: string;
+  category: string;
   quantity: string;
   unit: string;
   note: string;
@@ -37,6 +38,8 @@ const recurrenceLabels: Record<RecurrenceType, string> = {
   weekdays: 'Dni robocze',
   custom: 'Niestandardowo',
 };
+const shoppingQuickUnits = ['szt', 'kg', 'g', 'l', 'ml', 'opak'] as const;
+const shoppingCategories = ['Warzywa', 'Owoce', 'Nabial', 'Pieczywo', 'Mieso', 'Napoje', 'Chemia'] as const;
 
 function isValidDateKey(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
@@ -63,6 +66,7 @@ function buildEditorState(item?: Item | null): TaskEditorState {
 
   return {
     title: item?.title ?? '',
+    category: item?.category ?? '',
     quantity: item?.quantity ?? '',
     unit: item?.unit ?? '',
     note: item?.note ?? '',
@@ -100,6 +104,21 @@ function formatShoppingAmount(item: Pick<Item, 'quantity' | 'unit'>) {
   }
 
   return `${item.quantity ?? ''}${item.quantity && item.unit ? ' ' : ''}${item.unit ?? ''}`.trim();
+}
+
+function formatShoppingSummary(item: Pick<Item, 'category' | 'quantity' | 'unit'>) {
+  const parts = [];
+
+  if (item.category?.trim()) {
+    parts.push(item.category.trim());
+  }
+
+  const amount = item.quantity || item.unit ? formatShoppingAmount(item) : null;
+  if (amount) {
+    parts.push(amount);
+  }
+
+  return parts.length > 0 ? parts.join(' • ') : 'Bez ilosci, jednostki i kategorii';
 }
 
 export function TaskPreviewScreen() {
@@ -177,6 +196,7 @@ export function TaskPreviewScreen() {
     setIsSaving(true);
     await itemsService.updateDetails(db, item.id, {
       title: nextTitle,
+      category: item.type === 'shopping' ? draft.category : null,
       quantity: draft.quantity,
       unit: draft.unit,
       note: draft.note,
@@ -250,7 +270,7 @@ export function TaskPreviewScreen() {
             </Text>
             <Text style={styles.supportingMeta}>
               {item.type === 'shopping'
-                ? formatShoppingAmount(item)
+                ? formatShoppingSummary(item)
                 : `${dueDateLabel} • ${getRecurrenceSummary(item)}`}
             </Text>
           </View>
@@ -306,38 +326,88 @@ export function TaskPreviewScreen() {
             />
 
             {item.type === 'shopping' ? (
-              <View style={styles.row}>
-                <View style={styles.fieldWrap}>
-                  <Text style={styles.detailLabel}>Ilosc</Text>
-                  <TextInput
-                    value={draft.quantity}
-                    onChangeText={(value) =>
-                      setDraft((current) => ({
-                        ...current,
-                        quantity: value,
-                      }))
-                    }
-                    style={styles.input}
-                    placeholder="Np. 2"
-                    placeholderTextColor={ui.colors.textSoft}
-                  />
+              <>
+                <Text style={styles.detailLabel}>Kategoria</Text>
+                <View style={styles.actionsWrap}>
+                  {shoppingCategories.map((category) => (
+                    <PrimaryButton
+                      key={`details-category-${category}`}
+                      label={category}
+                      tone={draft.category === category ? 'primary' : 'muted'}
+                      onPress={() =>
+                        setDraft((current) => ({
+                          ...current,
+                          category: current.category === category ? '' : category,
+                        }))
+                      }
+                    />
+                  ))}
                 </View>
-                <View style={styles.fieldWrap}>
-                  <Text style={styles.detailLabel}>Jednostka</Text>
-                  <TextInput
-                    value={draft.unit}
-                    onChangeText={(value) =>
-                      setDraft((current) => ({
-                        ...current,
-                        unit: value,
-                      }))
-                    }
-                    style={styles.input}
-                    placeholder="Np. l"
-                    placeholderTextColor={ui.colors.textSoft}
-                  />
+                <View style={styles.row}>
+                  <View style={styles.fieldWrap}>
+                    <Text style={styles.detailLabel}>Kategoria</Text>
+                    <TextInput
+                      value={draft.category}
+                      onChangeText={(value) =>
+                        setDraft((current) => ({
+                          ...current,
+                          category: value,
+                        }))
+                      }
+                      style={styles.input}
+                      placeholder="Np. Nabial"
+                      placeholderTextColor={ui.colors.textSoft}
+                    />
+                  </View>
                 </View>
-              </View>
+                <View style={styles.row}>
+                  <View style={styles.fieldWrap}>
+                    <Text style={styles.detailLabel}>Ilosc</Text>
+                    <TextInput
+                      value={draft.quantity}
+                      onChangeText={(value) =>
+                        setDraft((current) => ({
+                          ...current,
+                          quantity: value,
+                        }))
+                      }
+                      style={styles.input}
+                      placeholder="Np. 2"
+                      placeholderTextColor={ui.colors.textSoft}
+                    />
+                  </View>
+                  <View style={styles.fieldWrap}>
+                    <Text style={styles.detailLabel}>Jednostka</Text>
+                    <TextInput
+                      value={draft.unit}
+                      onChangeText={(value) =>
+                        setDraft((current) => ({
+                          ...current,
+                          unit: value,
+                        }))
+                      }
+                      style={styles.input}
+                      placeholder="Np. l"
+                      placeholderTextColor={ui.colors.textSoft}
+                    />
+                  </View>
+                </View>
+                <View style={styles.actionsWrap}>
+                  {shoppingQuickUnits.map((unit) => (
+                    <PrimaryButton
+                      key={`details-unit-${unit}`}
+                      label={unit}
+                      tone={draft.unit === unit ? 'primary' : 'muted'}
+                      onPress={() =>
+                        setDraft((current) => ({
+                          ...current,
+                          unit: current.unit === unit ? '' : unit,
+                        }))
+                      }
+                    />
+                  ))}
+                </View>
+              </>
             ) : (
               <>
                 <Text style={styles.detailLabel}>Notatka</Text>

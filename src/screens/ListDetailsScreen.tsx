@@ -24,15 +24,12 @@ import type { RootStackParamList } from '../app/navigation/types';
 
 type Navigation = NativeStackNavigationProp<RootStackParamList, 'ListDetails'>;
 type DetailsRoute = RouteProp<RootStackParamList, 'ListDetails'>;
-type TaskEditorState = {
-  title: string;
-  quantity: string;
-  unit: string;
-  note: string;
-  dueDate: string;
-  recurrenceType: RecurrenceType;
-  recurrenceInterval: string;
-  recurrenceUnit: RecurrenceUnit;
+type ShoppingSortMode = 'manual' | 'alpha';
+type ShoppingGroupMode = 'flat' | 'unit' | 'category';
+type ShoppingGroup = {
+  key: string;
+  label: string | null;
+  items: ItemTreeNode[];
 };
 
 const recurrenceOptions: RecurrenceType[] = ['none', 'daily', 'weekly', 'monthly', 'weekdays', 'custom'];
@@ -44,6 +41,16 @@ const recurrenceLabels: Record<RecurrenceType, string> = {
   weekdays: 'Dni robocze',
   custom: 'Niestandardowo',
 };
+const shoppingQuickUnits = ['szt', 'kg', 'g', 'l', 'ml', 'opak'] as const;
+const shoppingCategories = [
+  'Warzywa',
+  'Owoce',
+  'Nabial',
+  'Pieczywo',
+  'Mieso',
+  'Napoje',
+  'Chemia',
+] as const;
 
 function isValidDateKey(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
@@ -63,21 +70,6 @@ function parseRecurrenceConfig(raw: string | null) {
   } catch {
     return { interval: '1', unit: 'weeks' as RecurrenceUnit };
   }
-}
-
-function buildEditorState(item?: ItemTreeNode | null): TaskEditorState {
-  const parsed = parseRecurrenceConfig(item?.recurrenceConfig ?? null);
-
-  return {
-    title: item?.title ?? '',
-    quantity: item?.quantity ?? '',
-    unit: item?.unit ?? '',
-    note: item?.note ?? '',
-    dueDate: item?.dueDate ?? '',
-    recurrenceType: item?.recurrenceType ?? 'none',
-    recurrenceInterval: parsed.interval,
-    recurrenceUnit: parsed.unit,
-  };
 }
 
 function getRecurrenceSummary(item: ItemTreeNode) {
@@ -109,6 +101,64 @@ function formatShoppingAmount(item: Pick<ItemTreeNode, 'quantity' | 'unit'>) {
   return `${item.quantity ?? ''}${item.quantity && item.unit ? ' ' : ''}${item.unit ?? ''}`.trim();
 }
 
+function formatShoppingSecondaryMeta(item: ItemTreeNode) {
+  const parts = [];
+
+  if (item.category?.trim()) {
+    parts.push(item.category.trim());
+  }
+
+  const amount = formatShoppingAmount(item);
+  if (amount) {
+    parts.push(amount);
+  }
+
+  return parts.length > 0 ? parts.join(' • ') : null;
+}
+
+function sortShoppingItems(items: ItemTreeNode[], mode: ShoppingSortMode) {
+  if (mode === 'manual') {
+    return items;
+  }
+
+  return [...items].sort((left, right) => left.title.localeCompare(right.title, 'pl', { sensitivity: 'base' }));
+}
+
+function groupShoppingItems(items: ItemTreeNode[], mode: ShoppingGroupMode) {
+  if (mode === 'flat') {
+    return [{ key: 'all', label: null, items }];
+  }
+
+  const groups = new Map<string, ShoppingGroup>();
+
+  for (const item of items) {
+    const rawValue =
+      mode === 'category'
+        ? item.category?.trim()
+        : item.unit?.trim();
+    const normalizedValue = rawValue?.toLowerCase() || (mode === 'category' ? 'bez-kategorii' : 'bez-jednostki');
+    const label = rawValue || (mode === 'category' ? 'Bez kategorii' : 'Bez jednostki');
+    const current = groups.get(normalizedValue) ?? {
+      key: normalizedValue,
+      label,
+      items: [],
+    };
+    current.items.push(item);
+    groups.set(normalizedValue, current);
+  }
+
+  return [...groups.values()].sort((left, right) => {
+    const emptyKey = mode === 'category' ? 'bez-kategorii' : 'bez-jednostki';
+    if (left.key === emptyKey) {
+      return 1;
+    }
+    if (right.key === emptyKey) {
+      return -1;
+    }
+    return left.label!.localeCompare(right.label!, 'pl', { sensitivity: 'base' });
+  });
+}
+
 export function ListDetailsScreen() {
   const db = useAppDatabase();
   const navigation = useNavigation<Navigation>();
@@ -119,6 +169,7 @@ export function ListDetailsScreen() {
   const [list, setList] = useState<TodoList | null>(null);
   const [tree, setTree] = useState<ItemTreeNode[]>([]);
   const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [composerCategory, setComposerCategory] = useState('');
   const [composerQuantity, setComposerQuantity] = useState('');
   const [composerUnit, setComposerUnit] = useState('');
   const [composerNote, setComposerNote] = useState('');
@@ -127,6 +178,8 @@ export function ListDetailsScreen() {
   const [composerRecurrenceInterval, setComposerRecurrenceInterval] = useState('1');
   const [composerRecurrenceUnit, setComposerRecurrenceUnit] = useState<RecurrenceUnit>('weeks');
   const [showComposerDetails, setShowComposerDetails] = useState(false);
+  const [shoppingSortMode, setShoppingSortMode] = useState<ShoppingSortMode>('manual');
+  const [shoppingGroupMode, setShoppingGroupMode] = useState<ShoppingGroupMode>('flat');
   const [draftChildren, setDraftChildren] = useState<Record<string, string>>({});
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [newTaskError, setNewTaskError] = useState<string | null>(null);
@@ -152,6 +205,22 @@ export function ListDetailsScreen() {
   const shoppingDoneItems = useMemo(
     () => visibleItems.filter((item) => item.status === 'done'),
     [visibleItems]
+  );
+  const sortedShoppingOpenItems = useMemo(
+    () => sortShoppingItems(shoppingOpenItems, shoppingSortMode),
+    [shoppingOpenItems, shoppingSortMode]
+  );
+  const sortedShoppingDoneItems = useMemo(
+    () => sortShoppingItems(shoppingDoneItems, shoppingSortMode),
+    [shoppingDoneItems, shoppingSortMode]
+  );
+  const shoppingOpenGroups = useMemo(
+    () => groupShoppingItems(sortedShoppingOpenItems, shoppingGroupMode),
+    [shoppingGroupMode, sortedShoppingOpenItems]
+  );
+  const shoppingDoneGroups = useMemo(
+    () => groupShoppingItems(sortedShoppingDoneItems, shoppingGroupMode),
+    [shoppingGroupMode, sortedShoppingDoneItems]
   );
   const expandableIds = useMemo(() => collectExpandableIds(tree), [tree]);
   const listSummary = useMemo(() => {
@@ -214,6 +283,7 @@ export function ListDetailsScreen() {
 
     if (list?.type === 'shopping') {
       await itemsService.createShoppingItems(db, listId, nextTitle, {
+        category: composerCategory,
         quantity: composerQuantity,
         unit: composerUnit,
       });
@@ -227,6 +297,7 @@ export function ListDetailsScreen() {
       });
     }
     setNewTaskTitle('');
+    setComposerCategory('');
     setComposerQuantity('');
     setComposerUnit('');
     setComposerNote('');
@@ -241,6 +312,7 @@ export function ListDetailsScreen() {
     composerQuantity,
     composerUnit,
     composerDueDate,
+    composerCategory,
     composerNote,
     composerRecurrenceInterval,
     composerRecurrenceType,
@@ -417,9 +489,7 @@ export function ListDetailsScreen() {
                 <Text style={styles.itemMeta}>
                   {isShoppingList
                     ? `${item.status === 'done' ? 'Kupione' : 'Do kupienia'}${
-                        item.quantity || item.unit
-                          ? ` • ${item.quantity ?? ''}${item.quantity && item.unit ? ' ' : ''}${item.unit ?? ''}`
-                          : ''
+                        formatShoppingSecondaryMeta(item) ? ` • ${formatShoppingSecondaryMeta(item)}` : ''
                       }`
                     : isInMyDay
                       ? `Moj dzien: ${item.myDayDate}`
@@ -584,6 +654,17 @@ export function ListDetailsScreen() {
     ]
   );
 
+  const renderShoppingGroups = useCallback(
+    (groups: ShoppingGroup[]) =>
+      groups.map((group) => (
+        <View key={group.key} style={group.label ? styles.shoppingGroupSection : undefined}>
+          {group.label ? <Text style={styles.shoppingGroupTitle}>{group.label}</Text> : null}
+          <View style={styles.shoppingGroupItems}>{group.items.map(renderItemCard)}</View>
+        </View>
+      )),
+    [renderItemCard]
+  );
+
   return (
     <ScreenContainer>
       <View style={styles.headerCard}>
@@ -625,6 +706,18 @@ export function ListDetailsScreen() {
         </Text>
         {isShoppingList ? (
           <View style={styles.scheduleRow}>
+            {shoppingCategories.map((category) => (
+              <PrimaryButton
+                key={`composer-category-${category}`}
+                label={category}
+                tone={composerCategory === category ? 'primary' : 'muted'}
+                onPress={() => setComposerCategory((current) => (current === category ? '' : category))}
+              />
+            ))}
+          </View>
+        ) : null}
+        {isShoppingList ? (
+          <View style={styles.scheduleRow}>
             <TextInput
               value={composerQuantity}
               onChangeText={setComposerQuantity}
@@ -639,6 +732,18 @@ export function ListDetailsScreen() {
               placeholder="Jednostka"
               placeholderTextColor={ui.colors.textSoft}
             />
+          </View>
+        ) : null}
+        {isShoppingList ? (
+          <View style={styles.scheduleRow}>
+            {shoppingQuickUnits.map((unit) => (
+              <PrimaryButton
+                key={`composer-unit-${unit}`}
+                label={unit}
+                tone={composerUnit === unit ? 'primary' : 'muted'}
+                onPress={() => setComposerUnit((current) => (current === unit ? '' : unit))}
+              />
+            ))}
           </View>
         ) : null}
         <PrimaryButton
@@ -743,13 +848,40 @@ export function ListDetailsScreen() {
         </View>
       ) : null}
 
-      {isShoppingList && shoppingDoneItems.length > 0 ? (
+      {isShoppingList ? (
         <View style={styles.toolbarRow}>
+          <PrimaryButton
+            label="Kolejnosc reczna"
+            tone={shoppingSortMode === 'manual' ? 'primary' : 'muted'}
+            onPress={() => setShoppingSortMode('manual')}
+          />
+          <PrimaryButton
+            label="A-Z"
+            tone={shoppingSortMode === 'alpha' ? 'primary' : 'muted'}
+            onPress={() => setShoppingSortMode('alpha')}
+          />
+          <PrimaryButton
+            label="Bez grup"
+            tone={shoppingGroupMode === 'flat' ? 'primary' : 'muted'}
+            onPress={() => setShoppingGroupMode('flat')}
+          />
+          <PrimaryButton
+            label="Grupuj kategorie"
+            tone={shoppingGroupMode === 'category' ? 'primary' : 'muted'}
+            onPress={() => setShoppingGroupMode('category')}
+          />
+          <PrimaryButton
+            label="Grupuj jednostki"
+            tone={shoppingGroupMode === 'unit' ? 'primary' : 'muted'}
+            onPress={() => setShoppingGroupMode('unit')}
+          />
+          {shoppingDoneItems.length > 0 ? (
           <PrimaryButton
             label="Wyczysc kupione"
             tone="danger"
             onPress={() => void handleClearDoneShoppingItems()}
           />
+          ) : null}
         </View>
       ) : null}
 
@@ -772,7 +904,7 @@ export function ListDetailsScreen() {
           />
         ) : null}
 
-        {(isShoppingList ? shoppingOpenItems : taskOpenItems).map(renderItemCard)}
+        {isShoppingList ? renderShoppingGroups(shoppingOpenGroups) : taskOpenItems.map(renderItemCard)}
 
         {!isShoppingList && taskDoneItems.length > 0 ? (
           <View style={styles.doneSection}>
@@ -784,7 +916,7 @@ export function ListDetailsScreen() {
         {isShoppingList && shoppingDoneItems.length > 0 ? (
           <View style={styles.doneSection}>
             <Text style={styles.doneSectionTitle}>Kupione</Text>
-            {shoppingDoneItems.map(renderItemCard)}
+            {renderShoppingGroups(shoppingDoneGroups)}
           </View>
         ) : null}
       </View>
@@ -868,6 +1000,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
+  },
+  shoppingGroupSection: {
+    gap: 10,
+  },
+  shoppingGroupItems: {
+    gap: 12,
+  },
+  shoppingGroupTitle: {
+    color: ui.colors.textSoft,
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    paddingLeft: 4,
   },
   itemCard: {
     backgroundColor: 'rgba(12, 27, 43, 0.78)',

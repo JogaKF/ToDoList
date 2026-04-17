@@ -7,6 +7,7 @@ import type { Item, RecurrenceConfig, RecurrenceType, RecurrenceUnit } from './t
 import { buildItemTree } from './tree';
 
 type TaskDetailsInput = {
+  category?: string | null;
   quantity?: string | null;
   unit?: string | null;
   note?: string | null;
@@ -61,6 +62,7 @@ export const itemsService = {
       title,
       parentId: parentId ?? null,
       type: 'task',
+      category: details?.category ?? null,
       quantity: details?.quantity ?? null,
       unit: details?.unit ?? null,
       note: details?.note ?? null,
@@ -76,6 +78,7 @@ export const itemsService = {
       title,
       parentId: null,
       type: 'shopping',
+      category: details?.category ?? null,
       quantity: details?.quantity ?? null,
       unit: details?.unit ?? null,
     });
@@ -93,6 +96,7 @@ export const itemsService = {
         title,
         parentId: null,
         type: 'shopping',
+        category: details?.category ?? null,
         quantity: details?.quantity ?? null,
         unit: details?.unit ?? null,
       });
@@ -108,6 +112,7 @@ export const itemsService = {
     itemId: string,
     input: {
       title: string;
+      category: string | null;
       quantity: string | null;
       unit: string | null;
       note: string | null;
@@ -119,6 +124,7 @@ export const itemsService = {
   ) {
     return itemsRepository.updateDetails(db, itemId, {
       title: input.title,
+      category: input.category,
       quantity: input.quantity,
       unit: input.unit,
       note: input.note,

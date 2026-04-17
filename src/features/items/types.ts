@@ -14,6 +14,7 @@ export type Item = {
   parentId: string | null;
   type: ItemType;
   title: string;
+  category: string | null;
   quantity: string | null;
   unit: string | null;
   note: string | null;

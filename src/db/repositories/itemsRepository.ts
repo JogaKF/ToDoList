@@ -10,6 +10,7 @@ type CreateItemInput = {
   title: string;
   parentId?: string | null;
   type?: Item['type'];
+  category?: string | null;
   quantity?: string | null;
   unit?: string | null;
   note?: string | null;
@@ -65,6 +66,7 @@ export const itemsRepository = {
       parentId: input.parentId ?? null,
       type: input.type ?? 'task',
       title: input.title.trim(),
+      category: input.category?.trim() ? input.category.trim() : null,
       quantity: input.quantity?.trim() ? input.quantity.trim() : null,
       unit: input.unit?.trim() ? input.unit.trim() : null,
       note: input.note?.trim() ? input.note.trim() : null,
@@ -83,13 +85,14 @@ export const itemsRepository = {
 
     await db.runAsync(
       `INSERT INTO items (
-        id, listId, parentId, type, title, quantity, unit, note, status, dueDate, recurrenceType, recurrenceConfig, recurrenceOriginId, previousRecurringItemId, myDayDate, position, createdAt, updatedAt, deletedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        id, listId, parentId, type, title, category, quantity, unit, note, status, dueDate, recurrenceType, recurrenceConfig, recurrenceOriginId, previousRecurringItemId, myDayDate, position, createdAt, updatedAt, deletedAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       item.id,
       item.listId,
       item.parentId,
       item.type,
       item.title,
+      item.category,
       item.quantity,
       item.unit,
       item.note,
@@ -125,6 +128,7 @@ export const itemsRepository = {
     id: string,
     input: {
       title: string;
+      category: string | null;
       quantity: string | null;
       unit: string | null;
       note: string | null;
@@ -135,13 +139,14 @@ export const itemsRepository = {
   ) {
     await db.runAsync(
       `UPDATE items
-       SET title = ?, quantity = ?, unit = ?, note = ?, dueDate = ?, recurrenceType = ?, recurrenceConfig = ?, recurrenceOriginId = CASE
+       SET title = ?, category = ?, quantity = ?, unit = ?, note = ?, dueDate = ?, recurrenceType = ?, recurrenceConfig = ?, recurrenceOriginId = CASE
          WHEN ? != 'none' AND recurrenceOriginId IS NULL THEN id
          WHEN ? = 'none' THEN NULL
          ELSE recurrenceOriginId
        END, updatedAt = ?
        WHERE id = ?`,
       input.title.trim(),
+      input.category?.trim() ? input.category.trim() : null,
       input.quantity?.trim() ? input.quantity.trim() : null,
       input.unit?.trim() ? input.unit.trim() : null,
       input.note?.trim() ? input.note.trim() : null,
@@ -290,13 +295,14 @@ export const itemsRepository = {
 
       await db.runAsync(
         `INSERT INTO items (
-          id, listId, parentId, type, title, quantity, unit, note, status, dueDate, recurrenceType, recurrenceConfig, recurrenceOriginId, previousRecurringItemId, myDayDate, position, createdAt, updatedAt, deletedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          id, listId, parentId, type, title, category, quantity, unit, note, status, dueDate, recurrenceType, recurrenceConfig, recurrenceOriginId, previousRecurringItemId, myDayDate, position, createdAt, updatedAt, deletedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         newId,
         subtreeItem.listId,
         clonedParentId,
         subtreeItem.type,
         subtreeItem.title,
+        subtreeItem.category,
         subtreeItem.quantity,
         subtreeItem.unit,
         subtreeItem.note,
