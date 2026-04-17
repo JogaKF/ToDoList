@@ -54,10 +54,6 @@ export const itemsService = {
     }
   },
 
-  createSiblingTask(db: SQLiteDatabase, item: Item, title: string) {
-    return itemsRepository.createSibling(db, item, title);
-  },
-
   rename(db: SQLiteDatabase, itemId: string, title: string) {
     return itemsRepository.updateTitle(db, itemId, title);
   },

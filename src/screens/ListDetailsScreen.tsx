@@ -34,14 +34,12 @@ export function ListDetailsScreen() {
   const [tree, setTree] = useState<ItemTreeNode[]>([]);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [draftChildren, setDraftChildren] = useState<Record<string, string>>({});
-  const [draftSiblings, setDraftSiblings] = useState<Record<string, string>>({});
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [newTaskError, setNewTaskError] = useState<string | null>(null);
   const [editingError, setEditingError] = useState<string | null>(null);
   const [draftErrors, setDraftErrors] = useState<Record<string, string>>({});
-  const [siblingErrors, setSiblingErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
 
   const listId = route.params.listId;
@@ -144,31 +142,6 @@ export function ListDetailsScreen() {
       await loadData();
     },
     [db, draftChildren, expandMany, listId, loadData]
-  );
-
-  const handleCreateSiblingTask = useCallback(
-    async (item: ItemTreeNode) => {
-      const title = draftSiblings[item.id]?.trim();
-      if (!title) {
-        setSiblingErrors((current) => ({
-          ...current,
-          [item.id]: 'Wpisz nazwe elementu obok przed zapisem.',
-        }));
-        return;
-      }
-
-      await itemsService.createSiblingTask(db, item, title);
-      setDraftSiblings((current) => ({
-        ...current,
-        [item.id]: '',
-      }));
-      setSiblingErrors((current) => ({
-        ...current,
-        [item.id]: '',
-      }));
-      await loadData();
-    },
-    [db, draftSiblings, loadData]
   );
 
   const handleToggleDone = useCallback(
@@ -546,8 +519,7 @@ export function ListDetailsScreen() {
                 <View style={styles.childComposer}>
                   {!isEditing &&
                   (isSelected ||
-                    (draftChildren[item.id] ?? '').length > 0 ||
-                    (draftSiblings[item.id] ?? '').length > 0) ? (
+                    (draftChildren[item.id] ?? '').length > 0) ? (
                     <>
                       <TextInput
                         value={draftChildren[item.id] ?? ''}
@@ -573,45 +545,14 @@ export function ListDetailsScreen() {
                       <Text style={styles.inputHintInline}>
                         {draftErrors[item.id] ||
                           (item.parentId
-                            ? 'Nowy poziom zapisze sie lokalnie pod tym elementem.'
-                            : 'Subtask pojawi sie od razu pod wybranym taskiem.')}
-                      </Text>
-                      <TextInput
-                        value={draftSiblings[item.id] ?? ''}
-                        onChangeText={(value) => {
-                          setDraftSiblings((current) => ({
-                            ...current,
-                            [item.id]: value,
-                          }));
-                          if (value.trim()) {
-                            setSiblingErrors((current) => ({
-                              ...current,
-                              [item.id]: '',
-                            }));
-                          }
-                        }}
-                        placeholder="Dodaj rownolegle obok tego elementu"
-                        placeholderTextColor={ui.colors.textSoft}
-                        style={styles.input}
-                        maxLength={120}
-                        returnKeyType="done"
-                        onSubmitEditing={() => void handleCreateSiblingTask(item)}
-                      />
-                      <Text style={styles.inputHintInline}>
-                        {siblingErrors[item.id] ||
-                          'Nowy element trafi obok aktualnego, na tym samym poziomie.'}
+                              ? 'Nowy poziom zapisze sie lokalnie pod tym elementem.'
+                              : 'Subtask pojawi sie od razu pod wybranym taskiem.')}
                       </Text>
                       <View style={styles.subtaskActionsRow}>
                         <PrimaryButton
                           label={item.parentId ? 'Dodaj nizej' : 'Dodaj subtask'}
                           leadingIcon="+"
                           onPress={() => void handleCreateChildTask(item.id)}
-                        />
-                        <PrimaryButton
-                          label="Dodaj obok"
-                          leadingIcon="+"
-                          tone="muted"
-                          onPress={() => void handleCreateSiblingTask(item)}
                         />
                         {item.hasChildren ? (
                           <IconButton

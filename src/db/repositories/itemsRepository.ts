@@ -103,15 +103,6 @@ export const itemsRepository = {
     );
   },
 
-  async createSibling(db: SQLiteDatabase, item: Item, title: string) {
-    return this.create(db, {
-      listId: item.listId,
-      title,
-      parentId: item.parentId,
-      type: item.type,
-    });
-  },
-
   async moveWithinSiblings(db: SQLiteDatabase, item: Item, direction: 'up' | 'down') {
     const siblings = await db.getAllAsync<Pick<Item, 'id' | 'position'>>(
       `SELECT id, position
