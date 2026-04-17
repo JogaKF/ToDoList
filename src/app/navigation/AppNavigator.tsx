@@ -112,7 +112,7 @@ export function AppNavigator() {
         <RootStack.Screen
           name="TaskPreview"
           component={TaskPreviewScreen}
-          options={{ title: 'Podglad zadania' }}
+          options={{ title: 'Szczegoly zadania' }}
         />
       </RootStack.Navigator>
     </NavigationContainer>

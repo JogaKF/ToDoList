@@ -128,11 +128,8 @@ export function ListDetailsScreen() {
   const [composerRecurrenceUnit, setComposerRecurrenceUnit] = useState<RecurrenceUnit>('weeks');
   const [showComposerDetails, setShowComposerDetails] = useState(false);
   const [draftChildren, setDraftChildren] = useState<Record<string, string>>({});
-  const [editingItemId, setEditingItemId] = useState<string | null>(null);
-  const [editingDraft, setEditingDraft] = useState<TaskEditorState>(buildEditorState());
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [newTaskError, setNewTaskError] = useState<string | null>(null);
-  const [editingError, setEditingError] = useState<string | null>(null);
   const [draftErrors, setDraftErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
 
@@ -323,38 +320,6 @@ export function ListDetailsScreen() {
     [handleDelete]
   );
 
-  const handleRename = useCallback(
-    async (itemId: string) => {
-      const nextTitle = editingDraft.title.trim();
-      if (!nextTitle) {
-        setEditingError('Tytul nie moze byc pusty.');
-        return;
-      }
-
-      if (editingDraft.dueDate.trim() && !isValidDateKey(editingDraft.dueDate.trim())) {
-        setEditingError('Data zadania musi miec format YYYY-MM-DD.');
-        return;
-      }
-
-      await itemsService.updateDetails(db, itemId, {
-        title: nextTitle,
-        quantity: editingDraft.quantity,
-        unit: editingDraft.unit,
-        note: editingDraft.note,
-        dueDate: editingDraft.dueDate.trim() || null,
-        recurrenceType: editingDraft.recurrenceType,
-        recurrenceInterval: Number.parseInt(editingDraft.recurrenceInterval, 10) || 1,
-        recurrenceUnit: editingDraft.recurrenceUnit,
-      });
-      setEditingItemId(null);
-      setEditingDraft(buildEditorState());
-      setEditingError(null);
-      setSelectedItemId(null);
-      await loadData();
-    },
-    [db, editingDraft, loadData]
-  );
-
   const handleToggleMyDay = useCallback(
     async (item: ItemTreeNode) => {
       if (item.myDayDate) {
@@ -408,7 +373,6 @@ export function ListDetailsScreen() {
 
   const renderItemCard = useCallback(
     (item: ItemTreeNode) => {
-      const isEditing = editingItemId === item.id;
       const isSelected = selectedItemId === item.id;
       const canShowChildren = !isShoppingList;
       const todayDateKey = todayKey();
@@ -446,60 +410,38 @@ export function ListDetailsScreen() {
             </Pressable>
 
             <View style={styles.itemContent}>
-              {isEditing ? (
-                <TextInput
-                  value={editingDraft.title}
-                  onChangeText={(value) => {
-                    setEditingDraft((current) => ({
-                      ...current,
-                      title: value,
-                    }));
-                    if (value.trim()) {
-                      setEditingError(null);
-                    }
-                  }}
-                  style={styles.input}
-                  placeholder="Nowy tytul"
-                  placeholderTextColor={ui.colors.textSoft}
-                  autoFocus
-                  maxLength={120}
-                  returnKeyType="done"
-                  onSubmitEditing={() => void handleRename(item.id)}
-                />
-              ) : (
-                <>
-                  <Text style={[styles.itemTitle, item.status === 'done' && styles.itemDone]}>
-                    {item.title}
-                  </Text>
+              <>
+                <Text style={[styles.itemTitle, item.status === 'done' && styles.itemDone]}>
+                  {item.title}
+                </Text>
+                <Text style={styles.itemMeta}>
+                  {isShoppingList
+                    ? `${item.status === 'done' ? 'Kupione' : 'Do kupienia'}${
+                        item.quantity || item.unit
+                          ? ` • ${item.quantity ?? ''}${item.quantity && item.unit ? ' ' : ''}${item.unit ?? ''}`
+                          : ''
+                      }`
+                    : isInMyDay
+                      ? `Moj dzien: ${item.myDayDate}`
+                      : 'Poza Moim dniem'}
+                </Text>
+                {item.dueDate ? (
                   <Text style={styles.itemMeta}>
-                    {isShoppingList
-                      ? `${item.status === 'done' ? 'Kupione' : 'Do kupienia'}${
-                          item.quantity || item.unit
-                            ? ` • ${item.quantity ?? ''}${item.quantity && item.unit ? ' ' : ''}${item.unit ?? ''}`
-                            : ''
-                        }`
-                      : isInMyDay
-                        ? `Moj dzien: ${item.myDayDate}`
-                        : 'Poza Moim dniem'}
+                    Termin: {isValidDateKey(item.dueDate) ? formatDateLabel(item.dueDate) : item.dueDate}
                   </Text>
-                  {item.dueDate ? (
-                    <Text style={styles.itemMeta}>
-                      Termin: {isValidDateKey(item.dueDate) ? formatDateLabel(item.dueDate) : item.dueDate}
-                    </Text>
-                  ) : null}
-                  {getRecurrenceSummary(item) ? (
-                    <Text style={styles.itemMeta}>{getRecurrenceSummary(item)}</Text>
-                  ) : null}
-                  {item.note ? (
-                    <Text style={styles.itemNote} numberOfLines={2}>
-                      {item.note}
-                    </Text>
-                  ) : null}
-                  {!isShoppingList && item.parentId ? (
-                    <Text style={styles.itemHint}>Subtask</Text>
-                  ) : null}
-                </>
-              )}
+                ) : null}
+                {getRecurrenceSummary(item) ? (
+                  <Text style={styles.itemMeta}>{getRecurrenceSummary(item)}</Text>
+                ) : null}
+                {item.note ? (
+                  <Text style={styles.itemNote} numberOfLines={2}>
+                    {item.note}
+                  </Text>
+                ) : null}
+                {!isShoppingList && item.parentId ? (
+                  <Text style={styles.itemHint}>Subtask</Text>
+                ) : null}
+              </>
             </View>
 
             {isShoppingList && formatShoppingAmount(item) ? (
@@ -509,35 +451,27 @@ export function ListDetailsScreen() {
             ) : null}
           </View>
 
-          {isSelected || isEditing ? (
+          {isSelected ? (
             <View style={styles.actionsRow}>
-              {isEditing ? (
-                <Text style={styles.inputHintInline}>
-                  {editingError ?? 'Enter lub ikona potwierdzenia zapisze zmiane.'}
-                </Text>
-              ) : null}
               <View style={styles.iconCluster}>
                 <IconButton
                   icon="arrow-up"
                   onPress={() => void handleMoveItem(item, 'up')}
-                  disabled={isEditing}
                 />
                 <IconButton
                   icon="arrow-down"
                   onPress={() => void handleMoveItem(item, 'down')}
-                  disabled={isEditing}
                 />
                 {!isShoppingList ? (
                   <>
                     <IconButton
                       icon="indent"
                       onPress={() => void handleIndentItem(item)}
-                      disabled={isEditing}
                     />
                     <IconButton
                       icon="outdent"
                       onPress={() => void handleOutdentItem(item)}
-                      disabled={isEditing || !item.parentId}
+                      disabled={!item.parentId}
                     />
                   </>
                 ) : null}
@@ -552,40 +486,17 @@ export function ListDetailsScreen() {
                   icon="magnify"
                   onPress={() => navigation.navigate('TaskPreview', { itemId: item.id })}
                 />
-                {!isEditing ? (
-                  <IconButton
-                    icon="pencil-outline"
-                    onPress={() => {
-                      setEditingItemId(item.id);
-                      setEditingDraft(buildEditorState(item));
-                      setEditingError(null);
-                    }}
-                  />
-                ) : (
-                  <>
-                    <IconButton
-                      icon="check"
-                      tone="primary"
-                      onPress={() => void handleRename(item.id)}
-                    />
-                    <IconButton
-                      icon="close"
-                      onPress={() => {
-                        setEditingItemId(null);
-                        setEditingDraft(buildEditorState());
-                        setEditingError(null);
-                        setSelectedItemId(null);
-                      }}
-                    />
-                  </>
-                )}
+                <IconButton
+                  icon="pencil-outline"
+                  onPress={() => navigation.navigate('TaskPreview', { itemId: item.id })}
+                />
                 <IconButton
                   icon="trash-can-outline"
                   tone="danger"
                   onPress={() => confirmDelete(item)}
                 />
               </View>
-              {!isEditing && !isShoppingList ? (
+              {!isShoppingList ? (
                 <View style={styles.scheduleRow}>
                   <PrimaryButton
                     label={`Dzis ${formatDateLabel(todayDateKey)}`}
@@ -599,150 +510,12 @@ export function ListDetailsScreen() {
                   />
                 </View>
               ) : null}
-              {isEditing && !isShoppingList ? (
-                <View style={styles.detailsEditor}>
-                  <TextInput
-                    value={editingDraft.note}
-                    onChangeText={(value) =>
-                      setEditingDraft((current) => ({
-                        ...current,
-                        note: value,
-                      }))
-                    }
-                    style={[styles.input, styles.noteInput]}
-                    placeholder="Notatka do zadania"
-                    placeholderTextColor={ui.colors.textSoft}
-                    multiline
-                    textAlignVertical="top"
-                  />
-                  <TextInput
-                    value={editingDraft.dueDate}
-                    onChangeText={(value) =>
-                      setEditingDraft((current) => ({
-                        ...current,
-                        dueDate: value,
-                      }))
-                    }
-                    style={styles.input}
-                    placeholder="Termin YYYY-MM-DD"
-                    placeholderTextColor={ui.colors.textSoft}
-                    autoCapitalize="none"
-                  />
-                  <View style={styles.scheduleRow}>
-                    <PrimaryButton
-                      label="Dzisiaj"
-                      tone={editingDraft.dueDate === todayDateKey ? 'primary' : 'muted'}
-                      onPress={() =>
-                        setEditingDraft((current) => ({
-                          ...current,
-                          dueDate: todayDateKey,
-                        }))
-                      }
-                    />
-                    <PrimaryButton
-                      label="Jutro"
-                      tone={editingDraft.dueDate === tomorrowDateKey ? 'primary' : 'muted'}
-                      onPress={() =>
-                        setEditingDraft((current) => ({
-                          ...current,
-                          dueDate: tomorrowDateKey,
-                        }))
-                      }
-                    />
-                    <PrimaryButton
-                      label="Bez daty"
-                      tone={!editingDraft.dueDate ? 'primary' : 'muted'}
-                      onPress={() =>
-                        setEditingDraft((current) => ({
-                          ...current,
-                          dueDate: '',
-                        }))
-                      }
-                    />
-                  </View>
-                  <View style={styles.scheduleRow}>
-                    {recurrenceOptions.map((option) => (
-                      <PrimaryButton
-                        key={`${item.id}-${option}`}
-                        label={recurrenceLabels[option]}
-                        tone={editingDraft.recurrenceType === option ? 'primary' : 'muted'}
-                        onPress={() =>
-                          setEditingDraft((current) => ({
-                            ...current,
-                            recurrenceType: option,
-                          }))
-                        }
-                      />
-                    ))}
-                  </View>
-                  {editingDraft.recurrenceType === 'custom' ? (
-                    <View style={styles.scheduleRow}>
-                      <TextInput
-                        value={editingDraft.recurrenceInterval}
-                        onChangeText={(value) =>
-                          setEditingDraft((current) => ({
-                            ...current,
-                            recurrenceInterval: value.replace(/[^0-9]/g, ''),
-                          }))
-                        }
-                        style={[styles.input, styles.intervalInput]}
-                        placeholder="Interwal"
-                        placeholderTextColor={ui.colors.textSoft}
-                        keyboardType="number-pad"
-                      />
-                      {(['days', 'weeks', 'months'] as RecurrenceUnit[]).map((unit) => (
-                        <PrimaryButton
-                          key={`${item.id}-${unit}`}
-                          label={unit === 'days' ? 'Dni' : unit === 'weeks' ? 'Tygodnie' : 'Miesiace'}
-                          tone={editingDraft.recurrenceUnit === unit ? 'primary' : 'muted'}
-                          onPress={() =>
-                            setEditingDraft((current) => ({
-                              ...current,
-                              recurrenceUnit: unit,
-                            }))
-                          }
-                        />
-                      ))}
-                    </View>
-                  ) : null}
-                </View>
-              ) : null}
-              {isEditing && isShoppingList ? (
-                <View style={styles.detailsEditor}>
-                  <View style={styles.scheduleRow}>
-                    <TextInput
-                      value={editingDraft.quantity}
-                      onChangeText={(value) =>
-                        setEditingDraft((current) => ({
-                          ...current,
-                          quantity: value,
-                        }))
-                      }
-                      style={[styles.input, styles.shoppingMetaInput]}
-                      placeholder="Ilosc"
-                      placeholderTextColor={ui.colors.textSoft}
-                    />
-                    <TextInput
-                      value={editingDraft.unit}
-                      onChangeText={(value) =>
-                        setEditingDraft((current) => ({
-                          ...current,
-                          unit: value,
-                        }))
-                      }
-                      style={[styles.input, styles.shoppingMetaInput]}
-                      placeholder="Jednostka"
-                      placeholderTextColor={ui.colors.textSoft}
-                    />
-                  </View>
-                </View>
-              ) : null}
             </View>
           ) : null}
 
           {canShowChildren ? (
             <View style={styles.childComposer}>
-              {!isEditing && (isSelected || (draftChildren[item.id] ?? '').length > 0) ? (
+              {isSelected || (draftChildren[item.id] ?? '').length > 0 ? (
                 <>
                   <TextInput
                     value={draftChildren[item.id] ?? ''}
@@ -796,16 +569,11 @@ export function ListDetailsScreen() {
       db,
       draftChildren,
       draftErrors,
-      editingDraft,
-      editingError,
-      editingItemId,
       expandedIds,
       handleCreateChildTask,
-      handleDelete,
       handleIndentItem,
       handleMoveItem,
       handleOutdentItem,
-      handleRename,
       handleSetMyDayDate,
       handleToggleDone,
       handleToggleMyDay,
