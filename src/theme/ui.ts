@@ -19,7 +19,7 @@ export type ThemeColors = {
   shadow: string;
 };
 
-export type ThemeId = 'cyber' | 'aurora' | 'ember' | 'custom';
+export type ThemeId = 'cyber' | 'aurora' | 'ember' | 'glacier' | 'grove' | 'custom';
 
 export const themePresets: Record<Exclude<ThemeId, 'custom'>, ThemeColors> = {
   cyber: {
@@ -81,6 +81,46 @@ export const themePresets: Record<Exclude<ThemeId, 'custom'>, ThemeColors> = {
     input: '#210F18',
     white: '#FFFFFF',
     shadow: '#090306',
+  },
+  glacier: {
+    background: '#08141F',
+    backgroundTop: '#10273B',
+    panel: '#122538',
+    panelStrong: '#183149',
+    panelSoft: '#163047',
+    border: '#35668E',
+    borderStrong: '#7EC8FF',
+    text: '#F5FBFF',
+    textMuted: '#B0C8DC',
+    textSoft: '#88A5BC',
+    primary: '#5FB7FF',
+    primaryStrong: '#3C8ED0',
+    accent: '#B8FFF3',
+    danger: '#FF7998',
+    warning: '#FFD27A',
+    input: '#0D2031',
+    white: '#FFFFFF',
+    shadow: '#03080D',
+  },
+  grove: {
+    background: '#0B1711',
+    backgroundTop: '#14261B',
+    panel: '#14281D',
+    panelStrong: '#1B3426',
+    panelSoft: '#173123',
+    border: '#326248',
+    borderStrong: '#81D39F',
+    text: '#F6FFF8',
+    textMuted: '#B4D0BD',
+    textSoft: '#8EAF99',
+    primary: '#65C987',
+    primaryStrong: '#429E63',
+    accent: '#FFE58A',
+    danger: '#FF7E96',
+    warning: '#F5C06B',
+    input: '#102218',
+    white: '#FFFFFF',
+    shadow: '#030805',
   },
 };
 

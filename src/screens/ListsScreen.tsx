@@ -109,7 +109,7 @@ export function ListsScreen() {
   return (
     <ScreenContainer bottomInset={tabBarHeight + 16}>
       <View style={styles.hero}>
-        <Text style={styles.eyebrow}>Offline-first command center</Text>
+        <Text style={styles.eyebrow}>{t('lists_eyebrow')}</Text>
         <Text style={styles.title}>{t('lists_title')}</Text>
         <Text style={styles.subtitle}>{t('lists_intro')}</Text>
       </View>

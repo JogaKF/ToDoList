@@ -1,9 +1,10 @@
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useI18n, useTheme } from '../providers/PreferencesProvider';
+import { useI18n, usePreferences, useTheme } from '../providers/PreferencesProvider';
 import { ui } from '../../theme/ui';
 import { ListsScreen } from '../../screens/ListsScreen';
 import { ListDetailsScreen } from '../../screens/ListDetailsScreen';
@@ -21,9 +22,12 @@ function HomeTabsNavigator() {
   const insets = useSafeAreaInsets();
   const t = useI18n();
   const theme = useTheme();
+  const { startTab } = usePreferences();
 
   return (
     <HomeTabs.Navigator
+      key={startTab}
+      initialRouteName={startTab}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: theme.primary,
@@ -71,6 +75,7 @@ function HomeTabsNavigator() {
 export function AppNavigator() {
   const t = useI18n();
   const theme = useTheme();
+  const { isReady } = usePreferences();
   const navigationTheme = {
     ...DefaultTheme,
     colors: {
@@ -85,6 +90,8 @@ export function AppNavigator() {
 
   return (
     <NavigationContainer theme={navigationTheme}>
+      {!isReady ? <View style={{ flex: 1, backgroundColor: theme.background }} /> : null}
+      {isReady ? (
       <RootStack.Navigator
         screenOptions={{
           headerStyle: {
@@ -112,9 +119,10 @@ export function AppNavigator() {
         <RootStack.Screen
           name="TaskPreview"
           component={TaskPreviewScreen}
-          options={{ title: 'Szczegoly zadania' }}
+          options={{ title: t('task_details_title') }}
         />
       </RootStack.Navigator>
+      ) : null}
     </NavigationContainer>
   );
 }

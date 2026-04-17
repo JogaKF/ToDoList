@@ -9,7 +9,7 @@ import { PrimaryButton } from '../components/common/PrimaryButton';
 import { ScreenContainer } from '../components/common/ScreenContainer';
 import { StateCard } from '../components/common/StateCard';
 import { useRecovery } from '../app/providers/RecoveryProvider';
-import { useI18n } from '../app/providers/PreferencesProvider';
+import { useI18n, usePreferences } from '../app/providers/PreferencesProvider';
 import { useAppDatabase } from '../db/sqlite';
 import { buildItemTree, collectExpandableIds, flattenVisibleTree } from '../features/items/tree';
 import { useTreeUiStore } from '../features/items/useTreeUiStore';
@@ -35,6 +35,7 @@ export function MyDayScreen() {
   const { pushUndoAction, mutationTick } = useRecovery();
   const { expandedIds, toggleExpanded, expandMany } = useTreeUiStore();
   const t = useI18n();
+  const { showCompleted } = usePreferences();
   const [items, setItems] = useState<Item[]>([]);
   const [lists, setLists] = useState<TodoList[]>([]);
   const [selectedDate, setSelectedDate] = useState(todayKey());
@@ -89,10 +90,10 @@ export function MyDayScreen() {
   return (
     <ScreenContainer bottomInset={tabBarHeight + 16}>
       <View style={styles.hero}>
-        <Text style={styles.eyebrow}>Daily focus protocol</Text>
-        <Text style={styles.title}>Moj dzien</Text>
+        <Text style={styles.eyebrow}>{t('my_day_eyebrow')}</Text>
+        <Text style={styles.title}>{t('my_day_title')}</Text>
         <Text style={styles.subtitle}>
-          Widok na {formatDateLabel(selectedDate)} oparty wylacznie o lokalna baze i pole `myDayDate`.
+          {t('my_day_intro')} {formatDateLabel(selectedDate)}.
         </Text>
       </View>
 
@@ -199,7 +200,7 @@ export function MyDayScreen() {
               </View>
             </View>
           ))}
-          {flattenVisibleTree(group.tree, expandedIds).some((item) => item.status === 'done') ? (
+          {showCompleted && flattenVisibleTree(group.tree, expandedIds).some((item) => item.status === 'done') ? (
             <View style={styles.doneSection}>
               <Text style={styles.doneSectionTitle}>Zrobione</Text>
               {flattenVisibleTree(group.tree, expandedIds)

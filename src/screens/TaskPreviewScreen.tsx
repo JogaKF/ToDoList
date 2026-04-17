@@ -8,6 +8,7 @@ import { PrimaryButton } from '../components/common/PrimaryButton';
 import { ScreenContainer } from '../components/common/ScreenContainer';
 import { StateCard } from '../components/common/StateCard';
 import { useRecovery } from '../app/providers/RecoveryProvider';
+import { useI18n } from '../app/providers/PreferencesProvider';
 import { useAppDatabase } from '../db/sqlite';
 import { itemsService } from '../features/items/service';
 import type { Item, RecurrenceType, RecurrenceUnit } from '../features/items/types';
@@ -126,6 +127,7 @@ export function TaskPreviewScreen() {
   const db = useAppDatabase();
   const navigation = useNavigation<Navigation>();
   const { pushUndoAction, mutationTick } = useRecovery();
+  const t = useI18n();
   const route = useRoute<PreviewRoute>();
   const [item, setItem] = useState<Item | null>(null);
   const [draft, setDraft] = useState<TaskEditorState>(buildEditorState());
@@ -155,9 +157,9 @@ export function TaskPreviewScreen() {
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      title: item?.title ?? 'Szczegoly zadania',
+      title: item?.title ?? t('task_details_title'),
     });
-  }, [item?.title, navigation]);
+  }, [item?.title, navigation, t]);
 
   const dueDateLabel = useMemo(() => {
     if (!item?.dueDate) {

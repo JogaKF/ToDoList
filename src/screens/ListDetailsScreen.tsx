@@ -10,7 +10,7 @@ import { PrimaryButton } from '../components/common/PrimaryButton';
 import { ScreenContainer } from '../components/common/ScreenContainer';
 import { StateCard } from '../components/common/StateCard';
 import { useRecovery } from '../app/providers/RecoveryProvider';
-import { useI18n } from '../app/providers/PreferencesProvider';
+import { useI18n, usePreferences } from '../app/providers/PreferencesProvider';
 import { useAppDatabase } from '../db/sqlite';
 import { itemsService } from '../features/items/service';
 import { collectExpandableIds, flattenVisibleTree } from '../features/items/tree';
@@ -167,6 +167,8 @@ export function ListDetailsScreen() {
   const { expandedIds, toggleExpanded, expandMany, collapseMany } = useTreeUiStore();
   const { pushUndoAction, mutationTick } = useRecovery();
   const t = useI18n();
+  const { showCompleted, shoppingSortMode: defaultShoppingSortMode, shoppingGroupMode: defaultShoppingGroupMode } =
+    usePreferences();
 
   const [list, setList] = useState<TodoList | null>(null);
   const [tree, setTree] = useState<ItemTreeNode[]>([]);
@@ -180,8 +182,8 @@ export function ListDetailsScreen() {
   const [composerRecurrenceInterval, setComposerRecurrenceInterval] = useState('1');
   const [composerRecurrenceUnit, setComposerRecurrenceUnit] = useState<RecurrenceUnit>('weeks');
   const [showComposerDetails, setShowComposerDetails] = useState(false);
-  const [shoppingSortMode, setShoppingSortMode] = useState<ShoppingSortMode>('manual');
-  const [shoppingGroupMode, setShoppingGroupMode] = useState<ShoppingGroupMode>('flat');
+  const [shoppingSortMode, setShoppingSortMode] = useState<ShoppingSortMode>(defaultShoppingSortMode);
+  const [shoppingGroupMode, setShoppingGroupMode] = useState<ShoppingGroupMode>(defaultShoppingGroupMode);
   const [draftChildren, setDraftChildren] = useState<Record<string, string>>({});
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [newTaskError, setNewTaskError] = useState<string | null>(null);
@@ -251,6 +253,14 @@ export function ListDetailsScreen() {
   useEffect(() => {
     void loadData();
   }, [loadData, mutationTick]);
+
+  useEffect(() => {
+    setShoppingSortMode(defaultShoppingSortMode);
+  }, [defaultShoppingSortMode]);
+
+  useEffect(() => {
+    setShoppingGroupMode(defaultShoppingGroupMode);
+  }, [defaultShoppingGroupMode]);
 
   useFocusEffect(
     useCallback(() => {
@@ -929,14 +939,14 @@ export function ListDetailsScreen() {
 
         {isShoppingList ? renderShoppingGroups(shoppingOpenGroups) : taskOpenItems.map(renderItemCard)}
 
-        {!isShoppingList && taskDoneItems.length > 0 ? (
+        {!isShoppingList && showCompleted && taskDoneItems.length > 0 ? (
           <View style={styles.doneSection}>
             <Text style={styles.doneSectionTitle}>Ukonczone</Text>
             {taskDoneItems.map(renderItemCard)}
           </View>
         ) : null}
 
-        {isShoppingList && shoppingDoneItems.length > 0 ? (
+        {isShoppingList && showCompleted && shoppingDoneItems.length > 0 ? (
           <View style={styles.doneSection}>
             <Text style={styles.doneSectionTitle}>Kupione</Text>
             {renderShoppingGroups(shoppingDoneGroups)}

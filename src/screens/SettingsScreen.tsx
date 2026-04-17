@@ -5,10 +5,17 @@ import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { PrimaryButton } from '../components/common/PrimaryButton';
 import { ScreenContainer } from '../components/common/ScreenContainer';
 import { StateCard } from '../components/common/StateCard';
-import { useI18n, usePreferences, type TranslationKey } from '../app/providers/PreferencesProvider';
+import {
+  useI18n,
+  usePreferences,
+  type ShoppingGroupPreference,
+  type ShoppingSortPreference,
+  type StartTab,
+  type TranslationKey,
+} from '../app/providers/PreferencesProvider';
 import { ui, type ThemeId } from '../theme/ui';
 
-const themeOptions: ThemeId[] = ['cyber', 'aurora', 'ember', 'custom'];
+const themeOptions: ThemeId[] = ['cyber', 'aurora', 'ember', 'glacier', 'grove', 'custom'];
 const backgroundOptions = ['#07111F', '#06131A', '#170B12', '#102332', '#0F1A14', '#201225'];
 const panelOptions = ['#0F2137', '#11282D', '#291622', '#183047', '#163031', '#352032'];
 const primaryOptions = ['#1499C8', '#3BD6C6', '#FF7B54', '#7DB6FF', '#9BE15D', '#FF8AD8'];
@@ -50,10 +57,29 @@ function ColorPickerRow({ label, options, selectedColor, onSelect }: ColorPicker
 export function SettingsScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const t = useI18n();
-  const { language, themeId, customColors, setLanguage, setTheme, setCustomColors } = usePreferences();
+  const {
+    language,
+    themeId,
+    customColors,
+    showCompleted,
+    startTab,
+    shoppingSortMode,
+    shoppingGroupMode,
+    setLanguage,
+    setTheme,
+    setCustomColors,
+    setShowCompleted,
+    setStartTab,
+    setShoppingSortMode,
+    setShoppingGroupMode,
+  } = usePreferences();
   const [background, setBackground] = useState(customColors.background);
   const [panel, setPanel] = useState(customColors.panel);
   const [primary, setPrimary] = useState(customColors.primary);
+
+  const startTabOptions: StartTab[] = ['Lists', 'MyDay', 'Trash', 'Settings'];
+  const shoppingSortOptions: ShoppingSortPreference[] = ['manual', 'alpha'];
+  const shoppingGroupOptions: ShoppingGroupPreference[] = ['flat', 'unit', 'category'];
 
   useEffect(() => {
     setBackground(customColors.background);
@@ -107,6 +133,85 @@ export function SettingsScreen() {
       </View>
 
       <View style={styles.section}>
+        <Text style={styles.sectionTitle}>{t('settings_behavior_section')}</Text>
+        <Text style={styles.sectionHint}>{t('settings_behavior_hint')}</Text>
+        <Text style={styles.inputLabel}>{t('settings_show_completed')}</Text>
+        <Text style={styles.sectionHint}>{t('settings_show_completed_hint')}</Text>
+        <View style={styles.optionGrid}>
+          <PrimaryButton
+            label={t('settings_show')}
+            tone={showCompleted ? 'primary' : 'muted'}
+            onPress={() => {
+              void setShowCompleted(true);
+            }}
+          />
+          <PrimaryButton
+            label={t('settings_hide')}
+            tone={!showCompleted ? 'primary' : 'muted'}
+            onPress={() => {
+              void setShowCompleted(false);
+            }}
+          />
+        </View>
+        <Text style={styles.inputLabel}>{t('settings_start_tab')}</Text>
+        <View style={styles.optionGrid}>
+          {startTabOptions.map((option) => (
+            <PrimaryButton
+              key={option}
+              label={
+                t(
+                  `settings_start_${
+                    option === 'Lists'
+                      ? 'lists'
+                      : option === 'MyDay'
+                        ? 'my_day'
+                        : option === 'Trash'
+                          ? 'trash'
+                          : 'settings'
+                  }` as TranslationKey
+                )
+              }
+              tone={startTab === option ? 'primary' : 'muted'}
+              onPress={() => {
+                void setStartTab(option);
+              }}
+            />
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>{t('settings_shopping_section')}</Text>
+        <Text style={styles.sectionHint}>{t('settings_shopping_hint')}</Text>
+        <Text style={styles.inputLabel}>{t('settings_shopping_sort')}</Text>
+        <View style={styles.optionGrid}>
+          {shoppingSortOptions.map((option) => (
+            <PrimaryButton
+              key={option}
+              label={t(`settings_shopping_sort_${option}` as TranslationKey)}
+              tone={shoppingSortMode === option ? 'primary' : 'muted'}
+              onPress={() => {
+                void setShoppingSortMode(option);
+              }}
+            />
+          ))}
+        </View>
+        <Text style={styles.inputLabel}>{t('settings_shopping_group')}</Text>
+        <View style={styles.optionGrid}>
+          {shoppingGroupOptions.map((option) => (
+            <PrimaryButton
+              key={option}
+              label={t(`settings_shopping_group_${option}` as TranslationKey)}
+              tone={shoppingGroupMode === option ? 'primary' : 'muted'}
+              onPress={() => {
+                void setShoppingGroupMode(option);
+              }}
+            />
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.section}>
         <Text style={styles.sectionTitle}>{t('settings_custom_section')}</Text>
         <Text style={styles.sectionHint}>{t('settings_custom_hint')}</Text>
         <ColorPickerRow
@@ -134,8 +239,8 @@ export function SettingsScreen() {
           }}
         />
         <StateCard
-          title="Preview"
-          description="Wybierz zestaw kolorow i zapisz go jako motyw custom."
+          title={t('settings_preview_title')}
+          description={t('settings_preview_description')}
         />
       </View>
     </ScreenContainer>

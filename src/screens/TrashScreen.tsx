@@ -181,11 +181,9 @@ export function TrashScreen() {
   return (
     <ScreenContainer bottomInset={tabBarHeight + 16}>
       <View style={styles.hero}>
-        <Text style={styles.eyebrow}>Offline recovery zone</Text>
-        <Text style={styles.title}>Kosz</Text>
-        <Text style={styles.subtitle}>
-          Tu odzyskasz lokalnie usuniete listy i elementy bez backendu i bez syncu.
-        </Text>
+        <Text style={styles.eyebrow}>{t('trash_eyebrow')}</Text>
+        <Text style={styles.title}>{t('trash_title')}</Text>
+        <Text style={styles.subtitle}>{t('trash_intro')}</Text>
       </View>
 
       {isLoading ? (
