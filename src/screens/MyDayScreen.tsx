@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Swipeable } from 'react-native-gesture-handler';
 
 import { IconButton } from '../components/common/IconButton';
 import { PrimaryButton } from '../components/common/PrimaryButton';
@@ -19,14 +20,14 @@ import type { Item, ItemTreeNode } from '../features/items/types';
 import type { TodoList } from '../features/lists/types';
 import { ui } from '../theme/ui';
 import { dateKeyWithOffset, formatDateLabel, todayKey } from '../utils/date';
-import type { RootStackParamList } from '../app/navigation/types';
+import type { MyDayStackParamList } from '../app/navigation/types';
 
 type GroupedItems = {
   list: TodoList | undefined;
   tree: ItemTreeNode[];
 };
 
-type Navigation = NativeStackNavigationProp<RootStackParamList>;
+type Navigation = NativeStackNavigationProp<MyDayStackParamList, 'MyDayHome'>;
 
 export function MyDayScreen() {
   const db = useAppDatabase();
@@ -40,6 +41,7 @@ export function MyDayScreen() {
   const [lists, setLists] = useState<TodoList[]>([]);
   const [selectedDate, setSelectedDate] = useState(todayKey());
   const [isLoading, setIsLoading] = useState(true);
+  const swipeableRefs = useRef<Record<string, Swipeable | null>>({});
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -57,11 +59,60 @@ export function MyDayScreen() {
     void loadData();
   }, [loadData, mutationTick]);
 
+  const closeAllSwipeables = useCallback(() => {
+    Object.values(swipeableRefs.current).forEach((swipeable) => {
+      swipeable?.close();
+    });
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
+      closeAllSwipeables();
       void loadData();
-    }, [loadData])
+      return () => {
+        closeAllSwipeables();
+      };
+    }, [closeAllSwipeables, loadData])
   );
+
+  const handleToggleDone = useCallback(
+    async (item: ItemTreeNode) => {
+      await myDayService.toggleDone(db, item);
+      pushUndoAction({
+        id: `toggle-item-${item.id}-${Date.now()}`,
+        label:
+          item.status === 'done'
+            ? `Cofnieto ukonczenie: ${item.title}`
+            : `Zmieniono status zadania: ${item.title}`,
+        perform: async (undoDb) => {
+          const latestItem = await myDayService.getById(undoDb, item.id);
+          if (!latestItem) {
+            return;
+          }
+          await myDayService.toggleDone(undoDb, latestItem);
+        },
+      });
+      await loadData();
+    },
+    [db, loadData, pushUndoAction]
+  );
+
+  const handleRemoveFromDay = useCallback(
+    async (itemId: string) => {
+      closeAllSwipeables();
+      await myDayService.removeFromDay(db, itemId);
+      await loadData();
+    },
+    [closeAllSwipeables, db, loadData]
+  );
+
+  const renderSwipeLeftAction = useCallback(() => {
+    return (
+      <View style={styles.swipeRemoveAction}>
+        <Text style={styles.swipeRemoveText}>Usun z dnia</Text>
+      </View>
+    );
+  }, []);
 
   const groupedItems = useMemo<GroupedItems[]>(() => {
     const map = new Map<string, Item[]>();
@@ -86,6 +137,93 @@ export function MyDayScreen() {
       expandMany(idsToExpand);
     }
   }, [expandMany, groupedItems]);
+
+  const renderDayItem = useCallback(
+    (item: ItemTreeNode) => (
+      <Swipeable
+        key={item.id}
+        ref={(instance) => {
+          swipeableRefs.current[item.id] = instance;
+        }}
+        overshootLeft={false}
+        overshootRight={false}
+        rightThreshold={72}
+        friction={2}
+        renderRightActions={renderSwipeLeftAction}
+        onSwipeableOpen={(direction) => {
+          if (direction === 'right') {
+            void handleRemoveFromDay(item.id);
+          }
+        }}
+      >
+        <View
+          style={[
+            styles.itemCard,
+            {
+              marginLeft: item.depth * 12,
+              borderLeftWidth: item.depth > 0 ? 2 : 0,
+              borderLeftColor: item.depth > 0 ? 'rgba(29, 77, 105, 0.65)' : 'transparent',
+            },
+          ]}
+        >
+          <View style={styles.itemRow}>
+            {item.hasChildren ? (
+              <Pressable onPress={() => toggleExpanded(item.id)} style={styles.treeToggle}>
+                <Text style={styles.treeToggleText}>{expandedIds[item.id] ? '⌄' : '›'}</Text>
+              </Pressable>
+            ) : (
+              <View style={styles.treeSpacer} />
+            )}
+            <Pressable
+              onPress={() => {
+                void handleToggleDone(item);
+              }}
+              style={[styles.checkbox, item.status === 'done' && styles.checkboxDone]}
+            >
+              <Text style={styles.checkboxLabel}>{item.status === 'done' ? '✓' : ''}</Text>
+            </Pressable>
+            <View style={styles.itemContent}>
+              <Text style={[styles.itemTitle, item.status === 'done' && styles.itemDone]}>
+                {item.title}
+              </Text>
+              <Text style={styles.itemMeta}>
+                {item.parentId ? 'Subtask' : 'Glowny task'} | {item.status}
+              </Text>
+            </View>
+            <IconButton
+              icon="magnify"
+              onPress={() => navigation.navigate('TaskPreview', { itemId: item.id })}
+            />
+            {item.status === 'done' ? (
+              <IconButton
+                icon="weather-sunny"
+                onPress={() => {
+                  void myDayService.moveToDay(db, item.id, dateKeyWithOffset(1)).then(loadData);
+                }}
+              />
+            ) : null}
+            <IconButton
+              icon="weather-sunset-down"
+              tone="danger"
+              onPress={() => {
+                void handleRemoveFromDay(item.id);
+              }}
+            />
+          </View>
+        </View>
+      </Swipeable>
+    ),
+    [
+      db,
+      expandedIds,
+      handleRemoveFromDay,
+      handleToggleDone,
+      loadData,
+      navigation,
+      renderSwipeLeftAction,
+      toggleExpanded,
+    ]
+  );
 
   return (
     <ScreenContainer bottomInset={tabBarHeight + 16}>
@@ -134,149 +272,13 @@ export function MyDayScreen() {
           <Text style={styles.groupTitle}>{group.list?.name ?? 'Nieznana lista'}</Text>
           {flattenVisibleTree(group.tree, expandedIds)
             .filter((item) => item.status === 'todo')
-            .map((item) => (
-            <View
-              key={item.id}
-              style={[
-                styles.itemCard,
-                {
-                  marginLeft: item.depth * 12,
-                  borderLeftWidth: item.depth > 0 ? 2 : 0,
-                  borderLeftColor: item.depth > 0 ? 'rgba(29, 77, 105, 0.65)' : 'transparent',
-                },
-              ]}
-            >
-              <View style={styles.itemRow}>
-                {item.hasChildren ? (
-                  <Pressable onPress={() => toggleExpanded(item.id)} style={styles.treeToggle}>
-                    <Text style={styles.treeToggleText}>{expandedIds[item.id] ? '⌄' : '›'}</Text>
-                  </Pressable>
-                ) : (
-                  <View style={styles.treeSpacer} />
-                )}
-                <Pressable
-                  onPress={() => {
-                    void myDayService.toggleDone(db, item).then(async () => {
-                      pushUndoAction({
-                        id: `toggle-item-${item.id}-${Date.now()}`,
-                        label:
-                          item.status === 'done'
-                            ? `Cofnieto ukonczenie: ${item.title}`
-                            : `Zmieniono status zadania: ${item.title}`,
-                        perform: async (undoDb) => {
-                          const latestItem = await myDayService.getById(undoDb, item.id);
-                          if (!latestItem) {
-                            return;
-                          }
-                          await myDayService.toggleDone(undoDb, latestItem);
-                        },
-                      });
-                      await loadData();
-                    });
-                  }}
-                  style={[styles.checkbox, item.status === 'done' && styles.checkboxDone]}
-                >
-                  <Text style={styles.checkboxLabel}>{item.status === 'done' ? '✓' : ''}</Text>
-                </Pressable>
-                <View style={styles.itemContent}>
-                  <Text style={[styles.itemTitle, item.status === 'done' && styles.itemDone]}>
-                    {item.title}
-                  </Text>
-                  <Text style={styles.itemMeta}>
-                    {item.parentId ? 'Subtask' : 'Glowny task'} | {item.status}
-                  </Text>
-                </View>
-                <IconButton
-                  icon="magnify"
-                  onPress={() => navigation.navigate('TaskPreview', { itemId: item.id })}
-                />
-                <IconButton
-                  icon="weather-sunset-down"
-                  tone="danger"
-                  onPress={() => {
-                    void myDayService.removeFromDay(db, item.id).then(loadData);
-                  }}
-                />
-              </View>
-            </View>
-          ))}
+            .map(renderDayItem)}
           {showCompleted && flattenVisibleTree(group.tree, expandedIds).some((item) => item.status === 'done') ? (
             <View style={styles.doneSection}>
               <Text style={styles.doneSectionTitle}>Zrobione</Text>
               {flattenVisibleTree(group.tree, expandedIds)
                 .filter((item) => item.status === 'done')
-                .map((item) => (
-                  <View
-                    key={item.id}
-                    style={[
-                      styles.itemCard,
-                      {
-                        marginLeft: item.depth * 12,
-                        borderLeftWidth: item.depth > 0 ? 2 : 0,
-                        borderLeftColor: item.depth > 0 ? 'rgba(29, 77, 105, 0.65)' : 'transparent',
-                      },
-                    ]}
-                  >
-                    <View style={styles.itemRow}>
-                      {item.hasChildren ? (
-                        <Pressable onPress={() => toggleExpanded(item.id)} style={styles.treeToggle}>
-                          <Text style={styles.treeToggleText}>{expandedIds[item.id] ? '⌄' : '›'}</Text>
-                        </Pressable>
-                      ) : (
-                        <View style={styles.treeSpacer} />
-                      )}
-                      <Pressable
-                        onPress={() => {
-                          void myDayService.toggleDone(db, item).then(async () => {
-                            pushUndoAction({
-                              id: `toggle-item-${item.id}-${Date.now()}`,
-                              label:
-                                item.status === 'done'
-                                  ? `Cofnieto ukonczenie: ${item.title}`
-                                  : `Zmieniono status zadania: ${item.title}`,
-                              perform: async (undoDb) => {
-                                const latestItem = await myDayService.getById(undoDb, item.id);
-                                if (!latestItem) {
-                                  return;
-                                }
-                                await myDayService.toggleDone(undoDb, latestItem);
-                              },
-                            });
-                            await loadData();
-                          });
-                        }}
-                        style={[styles.checkbox, item.status === 'done' && styles.checkboxDone]}
-                      >
-                        <Text style={styles.checkboxLabel}>{item.status === 'done' ? '✓' : ''}</Text>
-                      </Pressable>
-                      <View style={styles.itemContent}>
-                        <Text style={[styles.itemTitle, item.status === 'done' && styles.itemDone]}>
-                          {item.title}
-                        </Text>
-                        <Text style={styles.itemMeta}>
-                          {item.parentId ? 'Subtask' : 'Glowny task'} | {item.status}
-                        </Text>
-                      </View>
-                      <IconButton
-                        icon="magnify"
-                        onPress={() => navigation.navigate('TaskPreview', { itemId: item.id })}
-                      />
-                      <IconButton
-                        icon="weather-sunny"
-                        onPress={() => {
-                          void myDayService.moveToDay(db, item.id, dateKeyWithOffset(1)).then(loadData);
-                        }}
-                      />
-                      <IconButton
-                        icon="weather-sunset-down"
-                        tone="danger"
-                        onPress={() => {
-                          void myDayService.removeFromDay(db, item.id).then(loadData);
-                        }}
-                      />
-                    </View>
-                  </View>
-                ))}
+                .map(renderDayItem)}
             </View>
           ) : null}
         </View>
@@ -394,5 +396,21 @@ const styles = StyleSheet.create({
     color: ui.colors.textSoft,
     textTransform: 'uppercase',
     letterSpacing: 1,
+  },
+  swipeRemoveAction: {
+    minWidth: 128,
+    marginVertical: 2,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    backgroundColor: '#471A27',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 114, 145, 0.34)',
+  },
+  swipeRemoveText: {
+    color: '#FFB8C8',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

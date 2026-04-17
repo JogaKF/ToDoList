@@ -15,9 +15,9 @@ import { listsService } from '../features/lists/service';
 import type { TodoList, TodoListSummary } from '../features/lists/types';
 import { ui } from '../theme/ui';
 
-import type { RootStackParamList } from '../app/navigation/types';
+import type { ListsStackParamList } from '../app/navigation/types';
 
-type Navigation = NativeStackNavigationProp<RootStackParamList>;
+type Navigation = NativeStackNavigationProp<ListsStackParamList, 'ListsHome'>;
 
 export function ListsScreen() {
   const db = useAppDatabase();

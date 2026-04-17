@@ -1,9 +1,16 @@
-import type { NavigatorScreenParams } from '@react-navigation/native';
+export type TaskPreviewParams = {
+  itemId: string;
+};
 
-export type RootStackParamList = {
-  HomeTabs: NavigatorScreenParams<HomeTabParamList>;
+export type ListsStackParamList = {
+  ListsHome: undefined;
   ListDetails: { listId: string };
-  TaskPreview: { itemId: string };
+  TaskPreview: TaskPreviewParams;
+};
+
+export type MyDayStackParamList = {
+  MyDayHome: undefined;
+  TaskPreview: TaskPreviewParams;
 };
 
 export type HomeTabParamList = {

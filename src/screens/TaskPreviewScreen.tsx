@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -15,10 +16,14 @@ import type { Item, RecurrenceType, RecurrenceUnit } from '../features/items/typ
 import { ui } from '../theme/ui';
 import { dateKeyWithOffset, formatDateLabel, todayKey } from '../utils/date';
 
-import type { RootStackParamList } from '../app/navigation/types';
+import type { TaskPreviewParams } from '../app/navigation/types';
 
-type Navigation = NativeStackNavigationProp<RootStackParamList, 'TaskPreview'>;
-type PreviewRoute = RouteProp<RootStackParamList, 'TaskPreview'>;
+type TaskPreviewParamList = {
+  TaskPreview: TaskPreviewParams;
+};
+
+type Navigation = NativeStackNavigationProp<TaskPreviewParamList, 'TaskPreview'>;
+type PreviewRoute = RouteProp<TaskPreviewParamList, 'TaskPreview'>;
 type TaskEditorState = {
   title: string;
   category: string;
@@ -125,6 +130,7 @@ function formatShoppingSummary(item: Pick<Item, 'category' | 'quantity' | 'unit'
 
 export function TaskPreviewScreen() {
   const db = useAppDatabase();
+  const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation<Navigation>();
   const { pushUndoAction, mutationTick } = useRecovery();
   const t = useI18n();
@@ -264,7 +270,7 @@ export function TaskPreviewScreen() {
   );
 
   return (
-    <ScreenContainer>
+    <ScreenContainer bottomInset={tabBarHeight + 16}>
       {isLoading ? (
         <StateCard
           title="Laduje zadanie"

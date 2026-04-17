@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useFocusEffect } from '@react-navigation/native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
@@ -22,10 +23,10 @@ import type { TodoList } from '../features/lists/types';
 import { ui } from '../theme/ui';
 import { dateKeyWithOffset, formatDateLabel, todayKey } from '../utils/date';
 
-import type { RootStackParamList } from '../app/navigation/types';
+import type { ListsStackParamList } from '../app/navigation/types';
 
-type Navigation = NativeStackNavigationProp<RootStackParamList, 'ListDetails'>;
-type DetailsRoute = RouteProp<RootStackParamList, 'ListDetails'>;
+type Navigation = NativeStackNavigationProp<ListsStackParamList, 'ListDetails'>;
+type DetailsRoute = RouteProp<ListsStackParamList, 'ListDetails'>;
 type ShoppingSortMode = 'manual' | 'alpha';
 type ShoppingGroupMode = 'flat' | 'unit' | 'category';
 type ShoppingGroup = {
@@ -163,6 +164,7 @@ function groupShoppingItems(items: ItemTreeNode[], mode: ShoppingGroupMode) {
 
 export function ListDetailsScreen() {
   const db = useAppDatabase();
+  const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation<Navigation>();
   const route = useRoute<DetailsRoute>();
   const { expandedIds, toggleExpanded, expandMany, collapseMany } = useTreeUiStore();
@@ -775,7 +777,7 @@ export function ListDetailsScreen() {
   );
 
   return (
-    <ScreenContainer>
+    <ScreenContainer bottomInset={tabBarHeight + 16}>
       <View style={styles.headerCard}>
         <Text style={styles.headerTitle}>{list?.name ?? 'Lista'}</Text>
         <Text style={styles.headerMeta}>

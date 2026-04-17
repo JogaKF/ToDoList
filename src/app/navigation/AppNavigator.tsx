@@ -5,7 +5,6 @@ import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useI18n, usePreferences, useTheme } from '../providers/PreferencesProvider';
-import { ui } from '../../theme/ui';
 import { ListsScreen } from '../../screens/ListsScreen';
 import { ListDetailsScreen } from '../../screens/ListDetailsScreen';
 import { MyDayScreen } from '../../screens/MyDayScreen';
@@ -13,10 +12,82 @@ import { TrashScreen } from '../../screens/TrashScreen';
 import { SettingsScreen } from '../../screens/SettingsScreen';
 import { TaskPreviewScreen } from '../../screens/TaskPreviewScreen';
 
-import type { HomeTabParamList, RootStackParamList } from './types';
+import type { HomeTabParamList, ListsStackParamList, MyDayStackParamList } from './types';
 
-const RootStack = createNativeStackNavigator<RootStackParamList>();
 const HomeTabs = createBottomTabNavigator<HomeTabParamList>();
+const ListsStack = createNativeStackNavigator<ListsStackParamList>();
+const MyDayStack = createNativeStackNavigator<MyDayStackParamList>();
+
+function ListsStackNavigator() {
+  const t = useI18n();
+  const theme = useTheme();
+
+  return (
+    <ListsStack.Navigator
+      screenOptions={{
+        headerStyle: {
+          backgroundColor: theme.panel,
+        },
+        headerTintColor: theme.text,
+        headerTitleStyle: {
+          fontWeight: '800',
+        },
+        contentStyle: {
+          backgroundColor: theme.background,
+        },
+      }}
+    >
+      <ListsStack.Screen
+        name="ListsHome"
+        component={ListsScreen}
+        options={{ headerShown: false }}
+      />
+      <ListsStack.Screen
+        name="ListDetails"
+        component={ListDetailsScreen}
+        options={{ title: t('list_details') }}
+      />
+      <ListsStack.Screen
+        name="TaskPreview"
+        component={TaskPreviewScreen}
+        options={{ title: t('task_details_title') }}
+      />
+    </ListsStack.Navigator>
+  );
+}
+
+function MyDayStackNavigator() {
+  const t = useI18n();
+  const theme = useTheme();
+
+  return (
+    <MyDayStack.Navigator
+      screenOptions={{
+        headerStyle: {
+          backgroundColor: theme.panel,
+        },
+        headerTintColor: theme.text,
+        headerTitleStyle: {
+          fontWeight: '800',
+        },
+        contentStyle: {
+          backgroundColor: theme.background,
+        },
+      }}
+    >
+      <MyDayStack.Screen
+        name="MyDayHome"
+        component={MyDayScreen}
+        options={{ headerShown: false }}
+      />
+      <MyDayStack.Screen
+        name="TaskPreview"
+        component={TaskPreviewScreen}
+        options={{ title: t('task_details_title') }}
+      />
+    </MyDayStack.Navigator>
+  );
+}
 
 function HomeTabsNavigator() {
   const insets = useSafeAreaInsets();
@@ -64,8 +135,8 @@ function HomeTabsNavigator() {
         },
       }}
     >
-      <HomeTabs.Screen name="Lists" component={ListsScreen} options={{ title: t('tab_lists') }} />
-      <HomeTabs.Screen name="MyDay" component={MyDayScreen} options={{ title: t('tab_my_day') }} />
+      <HomeTabs.Screen name="Lists" component={ListsStackNavigator} options={{ title: t('tab_lists') }} />
+      <HomeTabs.Screen name="MyDay" component={MyDayStackNavigator} options={{ title: t('tab_my_day') }} />
       <HomeTabs.Screen name="Trash" component={TrashScreen} options={{ title: t('tab_trash') }} />
       <HomeTabs.Screen name="Settings" component={SettingsScreen} options={{ title: t('tab_settings') }} />
     </HomeTabs.Navigator>
@@ -73,7 +144,6 @@ function HomeTabsNavigator() {
 }
 
 export function AppNavigator() {
-  const t = useI18n();
   const theme = useTheme();
   const { isReady } = usePreferences();
   const navigationTheme = {
@@ -91,38 +161,7 @@ export function AppNavigator() {
   return (
     <NavigationContainer theme={navigationTheme}>
       {!isReady ? <View style={{ flex: 1, backgroundColor: theme.background }} /> : null}
-      {isReady ? (
-      <RootStack.Navigator
-        screenOptions={{
-          headerStyle: {
-            backgroundColor: theme.panel,
-          },
-          headerTintColor: theme.text,
-          headerTitleStyle: {
-            fontWeight: '800',
-          },
-          contentStyle: {
-            backgroundColor: theme.background,
-          },
-        }}
-      >
-        <RootStack.Screen
-          name="HomeTabs"
-          component={HomeTabsNavigator}
-          options={{ headerShown: false }}
-        />
-        <RootStack.Screen
-          name="ListDetails"
-          component={ListDetailsScreen}
-          options={{ title: t('list_details') }}
-        />
-        <RootStack.Screen
-          name="TaskPreview"
-          component={TaskPreviewScreen}
-          options={{ title: t('task_details_title') }}
-        />
-      </RootStack.Navigator>
-      ) : null}
+      {isReady ? <HomeTabsNavigator /> : null}
     </NavigationContainer>
   );
 }
