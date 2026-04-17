@@ -105,6 +105,16 @@ export function TaskPreviewScreen() {
 
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Szczegoly</Text>
+            {item.type === 'shopping' ? (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Ilosc</Text>
+                <Text style={styles.detailValue}>
+                  {item.quantity || item.unit
+                    ? `${item.quantity ?? ''}${item.quantity && item.unit ? ' ' : ''}${item.unit ?? ''}`
+                    : 'Bez ilosci i jednostki'}
+                </Text>
+              </View>
+            ) : null}
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Termin</Text>
               <Text style={styles.detailValue}>{dueDateLabel}</Text>

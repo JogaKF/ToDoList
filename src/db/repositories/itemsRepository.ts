@@ -9,6 +9,8 @@ type CreateItemInput = {
   title: string;
   parentId?: string | null;
   type?: Item['type'];
+  quantity?: string | null;
+  unit?: string | null;
   note?: string | null;
   dueDate?: string | null;
   recurrenceType?: RecurrenceType;
@@ -62,6 +64,8 @@ export const itemsRepository = {
       parentId: input.parentId ?? null,
       type: input.type ?? 'task',
       title: input.title.trim(),
+      quantity: input.quantity?.trim() ? input.quantity.trim() : null,
+      unit: input.unit?.trim() ? input.unit.trim() : null,
       note: input.note?.trim() ? input.note.trim() : null,
       status: 'todo',
       dueDate: input.dueDate ?? null,
@@ -76,13 +80,15 @@ export const itemsRepository = {
 
     await db.runAsync(
       `INSERT INTO items (
-        id, listId, parentId, type, title, note, status, dueDate, recurrenceType, recurrenceConfig, myDayDate, position, createdAt, updatedAt, deletedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        id, listId, parentId, type, title, quantity, unit, note, status, dueDate, recurrenceType, recurrenceConfig, myDayDate, position, createdAt, updatedAt, deletedAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       item.id,
       item.listId,
       item.parentId,
       item.type,
       item.title,
+      item.quantity,
+      item.unit,
       item.note,
       item.status,
       item.dueDate,
@@ -114,6 +120,8 @@ export const itemsRepository = {
     id: string,
     input: {
       title: string;
+      quantity: string | null;
+      unit: string | null;
       note: string | null;
       dueDate: string | null;
       recurrenceType: RecurrenceType;
@@ -122,9 +130,11 @@ export const itemsRepository = {
   ) {
     await db.runAsync(
       `UPDATE items
-       SET title = ?, note = ?, dueDate = ?, recurrenceType = ?, recurrenceConfig = ?, updatedAt = ?
+       SET title = ?, quantity = ?, unit = ?, note = ?, dueDate = ?, recurrenceType = ?, recurrenceConfig = ?, updatedAt = ?
        WHERE id = ?`,
       input.title.trim(),
+      input.quantity?.trim() ? input.quantity.trim() : null,
+      input.unit?.trim() ? input.unit.trim() : null,
       input.note?.trim() ? input.note.trim() : null,
       input.dueDate,
       input.recurrenceType,

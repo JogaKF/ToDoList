@@ -14,6 +14,8 @@ export type Item = {
   parentId: string | null;
   type: ItemType;
   title: string;
+  quantity: string | null;
+  unit: string | null;
   note: string | null;
   status: ItemStatus;
   dueDate: string | null;

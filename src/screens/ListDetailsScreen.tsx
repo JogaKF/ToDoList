@@ -26,6 +26,8 @@ type Navigation = NativeStackNavigationProp<RootStackParamList, 'ListDetails'>;
 type DetailsRoute = RouteProp<RootStackParamList, 'ListDetails'>;
 type TaskEditorState = {
   title: string;
+  quantity: string;
+  unit: string;
   note: string;
   dueDate: string;
   recurrenceType: RecurrenceType;
@@ -68,6 +70,8 @@ function buildEditorState(item?: ItemTreeNode | null): TaskEditorState {
 
   return {
     title: item?.title ?? '',
+    quantity: item?.quantity ?? '',
+    unit: item?.unit ?? '',
     note: item?.note ?? '',
     dueDate: item?.dueDate ?? '',
     recurrenceType: item?.recurrenceType ?? 'none',
@@ -97,6 +101,14 @@ function getRecurrenceSummary(item: ItemTreeNode) {
   }
 }
 
+function formatShoppingAmount(item: Pick<ItemTreeNode, 'quantity' | 'unit'>) {
+  if (!item.quantity && !item.unit) {
+    return null;
+  }
+
+  return `${item.quantity ?? ''}${item.quantity && item.unit ? ' ' : ''}${item.unit ?? ''}`.trim();
+}
+
 export function ListDetailsScreen() {
   const db = useAppDatabase();
   const navigation = useNavigation<Navigation>();
@@ -107,6 +119,8 @@ export function ListDetailsScreen() {
   const [list, setList] = useState<TodoList | null>(null);
   const [tree, setTree] = useState<ItemTreeNode[]>([]);
   const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [composerQuantity, setComposerQuantity] = useState('');
+  const [composerUnit, setComposerUnit] = useState('');
   const [composerNote, setComposerNote] = useState('');
   const [composerDueDate, setComposerDueDate] = useState('');
   const [composerRecurrenceType, setComposerRecurrenceType] = useState<RecurrenceType>('none');
@@ -194,7 +208,10 @@ export function ListDetailsScreen() {
     }
 
     if (list?.type === 'shopping') {
-      await itemsService.createShoppingItems(db, listId, nextTitle);
+      await itemsService.createShoppingItems(db, listId, nextTitle, {
+        quantity: composerQuantity,
+        unit: composerUnit,
+      });
     } else {
       await itemsService.createTask(db, listId, nextTitle, null, {
         note: composerNote,
@@ -205,6 +222,8 @@ export function ListDetailsScreen() {
       });
     }
     setNewTaskTitle('');
+    setComposerQuantity('');
+    setComposerUnit('');
     setComposerNote('');
     setComposerDueDate('');
     setComposerRecurrenceType('none');
@@ -214,6 +233,8 @@ export function ListDetailsScreen() {
     setNewTaskError(null);
     await loadData();
   }, [
+    composerQuantity,
+    composerUnit,
     composerDueDate,
     composerNote,
     composerRecurrenceInterval,
@@ -309,6 +330,8 @@ export function ListDetailsScreen() {
 
       await itemsService.updateDetails(db, itemId, {
         title: nextTitle,
+        quantity: editingDraft.quantity,
+        unit: editingDraft.unit,
         note: editingDraft.note,
         dueDate: editingDraft.dueDate.trim() || null,
         recurrenceType: editingDraft.recurrenceType,
@@ -414,6 +437,24 @@ export function ListDetailsScreen() {
               ? 'Wpisz wiele produktow naraz, oddzielajac je przecinkiem albo nowa linia.'
               : 'Tworz glowny task i potem rozwijaj go subtaskami.')}
         </Text>
+        {isShoppingList ? (
+          <View style={styles.scheduleRow}>
+            <TextInput
+              value={composerQuantity}
+              onChangeText={setComposerQuantity}
+              style={[styles.input, styles.shoppingMetaInput]}
+              placeholder="Ilosc"
+              placeholderTextColor={ui.colors.textSoft}
+            />
+            <TextInput
+              value={composerUnit}
+              onChangeText={setComposerUnit}
+              style={[styles.input, styles.shoppingMetaInput]}
+              placeholder="Jednostka"
+              placeholderTextColor={ui.colors.textSoft}
+            />
+          </View>
+        ) : null}
         <PrimaryButton
           label={isShoppingList ? t('details_add_product') : t('details_add_task')}
           leadingIcon="+"
@@ -614,9 +655,11 @@ export function ListDetailsScreen() {
                       </Text>
                       <Text style={styles.itemMeta}>
                         {isShoppingList
-                          ? item.status === 'done'
-                            ? 'Kupione'
-                            : 'Do kupienia'
+                          ? `${item.status === 'done' ? 'Kupione' : 'Do kupienia'}${
+                              item.quantity || item.unit
+                                ? ` • ${item.quantity ?? ''}${item.quantity && item.unit ? ' ' : ''}${item.unit ?? ''}`
+                                : ''
+                            }`
                           : isInMyDay
                             ? `Moj dzien: ${item.myDayDate}`
                             : 'Poza Moim dniem'}
@@ -640,6 +683,12 @@ export function ListDetailsScreen() {
                     </>
                   )}
                 </View>
+
+                {isShoppingList && formatShoppingAmount(item) ? (
+                  <View style={styles.shoppingAmountBadge}>
+                    <Text style={styles.shoppingAmountText}>{formatShoppingAmount(item)}</Text>
+                  </View>
+                ) : null}
               </View>
 
               {isSelected || isEditing ? (
@@ -840,6 +889,36 @@ export function ListDetailsScreen() {
                       ) : null}
                     </View>
                   ) : null}
+                  {isEditing && isShoppingList ? (
+                    <View style={styles.detailsEditor}>
+                      <View style={styles.scheduleRow}>
+                        <TextInput
+                          value={editingDraft.quantity}
+                          onChangeText={(value) =>
+                            setEditingDraft((current) => ({
+                              ...current,
+                              quantity: value,
+                            }))
+                          }
+                          style={[styles.input, styles.shoppingMetaInput]}
+                          placeholder="Ilosc"
+                          placeholderTextColor={ui.colors.textSoft}
+                        />
+                        <TextInput
+                          value={editingDraft.unit}
+                          onChangeText={(value) =>
+                            setEditingDraft((current) => ({
+                              ...current,
+                              unit: value,
+                            }))
+                          }
+                          style={[styles.input, styles.shoppingMetaInput]}
+                          placeholder="Jednostka"
+                          placeholderTextColor={ui.colors.textSoft}
+                        />
+                      </View>
+                    </View>
+                  ) : null}
                 </View>
               ) : null}
 
@@ -943,10 +1022,22 @@ export function ListDetailsScreen() {
                       ) : (
                         <>
                           <Text style={[styles.itemTitle, styles.itemDone]}>{item.title}</Text>
-                          <Text style={styles.itemMeta}>Kupione</Text>
+                          <Text style={styles.itemMeta}>
+                            {`Kupione${
+                              item.quantity || item.unit
+                                ? ` • ${item.quantity ?? ''}${item.quantity && item.unit ? ' ' : ''}${item.unit ?? ''}`
+                                : ''
+                            }`}
+                          </Text>
                         </>
                       )}
                     </View>
+
+                    {formatShoppingAmount(item) ? (
+                      <View style={styles.shoppingAmountBadge}>
+                        <Text style={styles.shoppingAmountText}>{formatShoppingAmount(item)}</Text>
+                      </View>
+                    ) : null}
                   </View>
 
                   {isSelected || isEditing ? (
@@ -1053,6 +1144,10 @@ const styles = StyleSheet.create({
     minHeight: 94,
     paddingTop: 14,
   },
+  shoppingMetaInput: {
+    minWidth: 120,
+    flex: 1,
+  },
   intervalInput: {
     minWidth: 100,
     flexGrow: 0,
@@ -1096,6 +1191,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
+  },
+  shoppingAmountBadge: {
+    minWidth: 64,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#143048',
+    borderWidth: 1,
+    borderColor: 'rgba(47, 122, 162, 0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shoppingAmountText: {
+    color: ui.colors.text,
+    fontSize: 13,
+    fontWeight: '700',
   },
   treeToggle: {
     width: 24,

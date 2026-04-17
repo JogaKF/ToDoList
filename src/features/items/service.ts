@@ -7,6 +7,8 @@ import type { Item, RecurrenceConfig, RecurrenceType, RecurrenceUnit } from './t
 import { buildItemTree } from './tree';
 
 type TaskDetailsInput = {
+  quantity?: string | null;
+  unit?: string | null;
   note?: string | null;
   dueDate?: string | null;
   recurrenceType?: RecurrenceType;
@@ -59,6 +61,8 @@ export const itemsService = {
       title,
       parentId: parentId ?? null,
       type: 'task',
+      quantity: details?.quantity ?? null,
+      unit: details?.unit ?? null,
       note: details?.note ?? null,
       dueDate: details?.dueDate ?? null,
       recurrenceType: details?.recurrenceType ?? 'none',
@@ -66,16 +70,18 @@ export const itemsService = {
     });
   },
 
-  createShoppingItem(db: SQLiteDatabase, listId: string, title: string) {
+  createShoppingItem(db: SQLiteDatabase, listId: string, title: string, details?: TaskDetailsInput) {
     return itemsRepository.create(db, {
       listId,
       title,
       parentId: null,
       type: 'shopping',
+      quantity: details?.quantity ?? null,
+      unit: details?.unit ?? null,
     });
   },
 
-  async createShoppingItems(db: SQLiteDatabase, listId: string, rawValue: string) {
+  async createShoppingItems(db: SQLiteDatabase, listId: string, rawValue: string, details?: TaskDetailsInput) {
     const titles = rawValue
       .split(/\n|,|;/)
       .map((part) => part.trim())
@@ -87,6 +93,8 @@ export const itemsService = {
         title,
         parentId: null,
         type: 'shopping',
+        quantity: details?.quantity ?? null,
+        unit: details?.unit ?? null,
       });
     }
   },
@@ -100,6 +108,8 @@ export const itemsService = {
     itemId: string,
     input: {
       title: string;
+      quantity: string | null;
+      unit: string | null;
       note: string | null;
       dueDate: string | null;
       recurrenceType: RecurrenceType;
@@ -109,6 +119,8 @@ export const itemsService = {
   ) {
     return itemsRepository.updateDetails(db, itemId, {
       title: input.title,
+      quantity: input.quantity,
+      unit: input.unit,
       note: input.note,
       dueDate: input.dueDate,
       recurrenceType: input.recurrenceType,
