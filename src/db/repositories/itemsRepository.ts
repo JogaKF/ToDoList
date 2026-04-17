@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import type { DeletedItem, Item, PlannedTask, RecurrenceType, SeriesEditScope } from '../../features/items/types';
+import type { DeletedItem, Item, ItemActivity, ItemRelations, PlannedTask, RecurrenceType, RelatedTaskPreview, SeriesEditScope } from '../../features/items/types';
 import { createId } from '../../utils/id';
 import { nowIso } from '../../utils/date';
 import { getNextRecurringDate } from '../../utils/recurrence';
@@ -34,6 +34,49 @@ export const itemsRepository = {
        WHERE listId = ? AND deletedAt IS NULL
        ORDER BY parentId ASC, position ASC, createdAt ASC`,
       listId
+    );
+  },
+
+  async getRelations(db: SQLiteDatabase, itemId: string) {
+    const item = await this.getById(db, itemId);
+    if (!item) {
+      return {
+        parent: null,
+        children: [],
+      } satisfies ItemRelations;
+    }
+
+    const [parent, children] = await Promise.all([
+      item.parentId
+        ? db.getFirstAsync<RelatedTaskPreview>(
+            `SELECT id, title, status, dueDate, myDayDate
+             FROM items
+             WHERE id = ? AND deletedAt IS NULL`,
+            item.parentId
+          )
+        : Promise.resolve(null),
+      db.getAllAsync<RelatedTaskPreview>(
+        `SELECT id, title, status, dueDate, myDayDate
+         FROM items
+         WHERE parentId = ? AND deletedAt IS NULL
+         ORDER BY position ASC, createdAt ASC`,
+        item.id
+      ),
+    ]);
+
+    return {
+      parent: parent ?? null,
+      children,
+    } satisfies ItemRelations;
+  },
+
+  async getActivity(db: SQLiteDatabase, itemId: string) {
+    return db.getAllAsync<ItemActivity>(
+      `SELECT * FROM item_activity
+       WHERE itemId = ?
+       ORDER BY createdAt DESC
+       LIMIT 20`,
+      itemId
     );
   },
 
@@ -111,6 +154,8 @@ export const itemsRepository = {
       item.deletedAt
     );
 
+    await this.logActivity(db, item.id, 'created', `Utworzono ${item.type === 'shopping' ? 'pozycje zakupow' : 'zadanie'}: ${item.title}`);
+
     return item;
   },
 
@@ -185,6 +230,13 @@ export const itemsRepository = {
         );
       }
 
+      await this.logActivity(
+        db,
+        currentItem.id,
+        'series_updated',
+        `Zmieniono cala serie: ${title}`
+      );
+
       return;
     }
 
@@ -210,6 +262,13 @@ export const itemsRepository = {
       timestamp,
       id
     );
+
+    await this.logActivity(
+      db,
+      id,
+      'item_updated',
+      `Zmieniono szczegoly zadania: ${title}`
+    );
   },
 
   async updateDueDate(db: SQLiteDatabase, id: string, dueDate: string | null, scope: SeriesEditScope = 'single') {
@@ -232,6 +291,7 @@ export const itemsRepository = {
         currentItem.id,
         recurrenceOriginId
       );
+      await this.logActivity(db, currentItem.id, 'series_rescheduled', `Przestawiono cala serie na ${dueDate ?? 'brak daty'}`);
       return;
     }
 
@@ -244,6 +304,8 @@ export const itemsRepository = {
       timestamp,
       id
     );
+
+    await this.logActivity(db, id, 'rescheduled', `Zmieniono termin na ${dueDate ?? 'brak daty'}`);
   },
 
   async updateDueDateMany(db: SQLiteDatabase, ids: string[], dueDate: string | null) {
@@ -264,6 +326,10 @@ export const itemsRepository = {
         );
       }
     });
+
+    for (const id of ids) {
+      await this.logActivity(db, id, 'bulk_rescheduled', `Zaplanowano hurtowo na ${dueDate ?? 'brak daty'}`);
+    }
   },
 
   async getPlannedTasks(db: SQLiteDatabase, mode: 'due' | 'myday') {
@@ -401,6 +467,13 @@ export const itemsRepository = {
         }
       }
     });
+
+    await this.logActivity(
+      db,
+      item.id,
+      'status_changed',
+      nextStatus === 'done' ? `Oznaczono jako zrobione: ${item.title}` : `Przywrocono do aktywnych: ${item.title}`
+    );
   },
 
   async completeRecurringItem(db: SQLiteDatabase, item: Item, timestamp: string) {
@@ -523,6 +596,8 @@ export const itemsRepository = {
         );
       }
     });
+
+    await this.logActivity(db, id, 'my_day_changed', dateKey ? `Dodano do Mojego dnia: ${dateKey}` : 'Usunieto z Mojego dnia');
   },
 
   async softDelete(db: SQLiteDatabase, id: string) {
@@ -543,6 +618,8 @@ export const itemsRepository = {
         );
       }
     });
+
+    await this.logActivity(db, id, 'deleted', 'Usunieto do kosza');
   },
 
   async softDeleteMany(db: SQLiteDatabase, ids: string[]) {
@@ -624,6 +701,8 @@ export const itemsRepository = {
         );
       }
     });
+
+    await this.logActivity(db, id, 'restored', 'Przywrocono z kosza');
   },
 
   async hardDelete(db: SQLiteDatabase, id: string) {
@@ -754,5 +833,17 @@ export const itemsRepository = {
     );
 
     return (row?.maxPosition ?? 0) + 1000;
+  },
+
+  async logActivity(db: SQLiteDatabase, itemId: string, action: string, label: string) {
+    await db.runAsync(
+      `INSERT INTO item_activity (id, itemId, action, label, createdAt)
+       VALUES (?, ?, ?, ?, ?)`,
+      createId('activity'),
+      itemId,
+      action,
+      label,
+      nowIso()
+    );
   },
 };

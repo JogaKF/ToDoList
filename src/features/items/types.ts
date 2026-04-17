@@ -49,3 +49,18 @@ export type DeletedItem = Item & {
   deletedAt: string;
   listName: string;
 };
+
+export type RelatedTaskPreview = Pick<Item, 'id' | 'title' | 'status' | 'dueDate' | 'myDayDate'>;
+
+export type ItemRelations = {
+  parent: RelatedTaskPreview | null;
+  children: RelatedTaskPreview[];
+};
+
+export type ItemActivity = {
+  id: string;
+  itemId: string;
+  action: string;
+  label: string;
+  createdAt: string;
+};

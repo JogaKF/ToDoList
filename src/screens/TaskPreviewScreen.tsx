@@ -12,9 +12,11 @@ import { useRecovery } from '../app/providers/RecoveryProvider';
 import { useI18n } from '../app/providers/PreferencesProvider';
 import { useAppDatabase } from '../db/sqlite';
 import { itemsService } from '../features/items/service';
-import type { Item, RecurrenceType, RecurrenceUnit, SeriesEditScope } from '../features/items/types';
+import { listsService } from '../features/lists/service';
+import type { Item, ItemActivity, ItemRelations, RecurrenceType, RecurrenceUnit, SeriesEditScope } from '../features/items/types';
+import type { TodoList } from '../features/lists/types';
 import { ui } from '../theme/ui';
-import { dateKeyWithOffset, formatDateLabel, todayKey } from '../utils/date';
+import { compareDateKeys, dateKeyWithOffset, formatDateLabel, todayKey } from '../utils/date';
 
 import type { TaskPreviewParams } from '../app/navigation/types';
 
@@ -136,6 +138,9 @@ export function TaskPreviewScreen() {
   const t = useI18n();
   const route = useRoute<PreviewRoute>();
   const [item, setItem] = useState<Item | null>(null);
+  const [sourceList, setSourceList] = useState<TodoList | null>(null);
+  const [relations, setRelations] = useState<ItemRelations>({ parent: null, children: [] });
+  const [activity, setActivity] = useState<ItemActivity[]>([]);
   const [draft, setDraft] = useState<TaskEditorState>(buildEditorState());
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -148,6 +153,20 @@ export function TaskPreviewScreen() {
     const nextItem = await itemsService.getById(db, route.params.itemId);
     setItem(nextItem ?? null);
     setDraft(buildEditorState(nextItem ?? null));
+    if (nextItem) {
+      const [nextList, nextRelations, nextActivity] = await Promise.all([
+        listsService.getById(db, nextItem.listId),
+        itemsService.getRelations(db, nextItem.id),
+        itemsService.getActivity(db, nextItem.id),
+      ]);
+      setSourceList(nextList ?? null);
+      setRelations(nextRelations);
+      setActivity(nextActivity);
+    } else {
+      setSourceList(null);
+      setRelations({ parent: null, children: [] });
+      setActivity([]);
+    }
     setIsLoading(false);
     setErrorMessage(null);
   }, [db, route.params.itemId]);
@@ -185,9 +204,49 @@ export function TaskPreviewScreen() {
   }, [item?.myDayDate]);
 
   const isTask = item?.type === 'task';
+  const isRecurringOverdue = useMemo(
+    () =>
+      Boolean(
+        item &&
+          item.type === 'task' &&
+          item.recurrenceType !== 'none' &&
+          item.status === 'todo' &&
+          item.dueDate &&
+          compareDateKeys(item.dueDate, todayKey()) < 0
+      ),
+    [item]
+  );
   const recurringPreview = useMemo(
     () => (item ? itemsService.getRecurringPreview(item, 4) : []),
     [item]
+  );
+
+  const openSourceList = useCallback(() => {
+    if (!item) {
+      return;
+    }
+
+    (navigation.getParent() as { navigate: (...args: unknown[]) => void } | undefined)?.navigate('Lists', {
+      screen: 'ListDetails',
+      params: { listId: item.listId },
+    });
+  }, [item, navigation]);
+
+  const handleRescheduleRecurring = useCallback(
+    async (dateKey: string, scope: SeriesEditScope) => {
+      if (!item) {
+        return;
+      }
+
+      await itemsService.updateDueDate(db, item.id, dateKey, scope);
+      await loadItem();
+      setSaveMessage(
+        scope === 'series'
+          ? `Przestawiono cala serie na ${formatDateLabel(dateKey)}.`
+          : `Przestawiono to wystapienie na ${formatDateLabel(dateKey)}.`
+      );
+    },
+    [db, item, loadItem]
   );
 
   const handleSave = useCallback(async () => {
@@ -332,6 +391,19 @@ export function TaskPreviewScreen() {
                 </>
               ) : null}
             </View>
+            {isRecurringOverdue ? (
+              <View style={styles.overdueCard}>
+                <Text style={styles.overdueTitle}>Zalegle wystapienie serii</Text>
+                <Text style={styles.overdueText}>
+                  To zadanie cykliczne ma termin w przeszlosci. Mozesz przesunac tylko to wystapienie albo od razu cala serie.
+                </Text>
+                <View style={styles.actionsWrap}>
+                  <PrimaryButton label="To wystapienie na dzis" tone="muted" onPress={() => void handleRescheduleRecurring(todayKey(), 'single')} />
+                  <PrimaryButton label="To wystapienie na jutro" tone="muted" onPress={() => void handleRescheduleRecurring(dateKeyWithOffset(1), 'single')} />
+                  <PrimaryButton label="Cala seria na dzis" tone="primary" onPress={() => void handleRescheduleRecurring(todayKey(), 'series')} />
+                </View>
+              </View>
+            ) : null}
           </View>
 
           <View style={styles.card}>
@@ -608,6 +680,65 @@ export function TaskPreviewScreen() {
               <Text style={styles.detailLabel}>Moj dzien</Text>
               <Text style={styles.detailValue}>{myDayLabel}</Text>
             </View>
+            {sourceList ? (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Lista zrodlowa</Text>
+                <View style={styles.inlineActions}>
+                  <Text style={styles.detailValue}>{sourceList.name}</Text>
+                  <PrimaryButton label="Otworz liste" tone="muted" onPress={openSourceList} />
+                </View>
+              </View>
+            ) : null}
+            {relations.parent ? (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Rodzic</Text>
+                <View style={styles.relationBlock}>
+                  <Text style={styles.detailValue}>{relations.parent.title}</Text>
+                  <PrimaryButton
+                    label="Otworz rodzica"
+                    tone="muted"
+                    onPress={() => navigation.push('TaskPreview', { itemId: relations.parent!.id })}
+                  />
+                </View>
+              </View>
+            ) : null}
+            {relations.children.length > 0 ? (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Dzieci</Text>
+                <View style={styles.relatedList}>
+                  {relations.children.map((child) => (
+                    <View key={child.id} style={styles.relatedCard}>
+                      <View style={styles.taskContent}>
+                        <Text style={styles.detailValue}>{child.title}</Text>
+                        <Text style={styles.relatedMeta}>
+                          {child.dueDate ? `Termin ${formatDateLabel(child.dueDate)}` : 'Bez terminu'}
+                        </Text>
+                      </View>
+                      <PrimaryButton
+                        label="Otworz"
+                        tone="muted"
+                        onPress={() => navigation.push('TaskPreview', { itemId: child.id })}
+                      />
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ) : null}
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Historia lokalna</Text>
+              {activity.length === 0 ? (
+                <Text style={styles.detailValue}>Brak zapisanych zmian lokalnych.</Text>
+              ) : (
+                <View style={styles.relatedList}>
+                  {activity.map((entry) => (
+                    <View key={entry.id} style={styles.historyCard}>
+                      <Text style={styles.historyLabel}>{entry.label}</Text>
+                      <Text style={styles.relatedMeta}>{new Date(entry.createdAt).toLocaleString('pl-PL')}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
             {saveMessage ? <Text style={styles.successText}>{saveMessage}</Text> : null}
             {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
             <View style={styles.actionsWrap}>
@@ -648,6 +779,24 @@ const styles = StyleSheet.create({
     color: ui.colors.textSoft,
     fontSize: 13,
   },
+  overdueCard: {
+    gap: 10,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: '#2E1B10',
+    borderWidth: 1,
+    borderColor: '#9C6630',
+  },
+  overdueTitle: {
+    color: '#FFD099',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  overdueText: {
+    color: '#F2D6B1',
+    fontSize: 13,
+    lineHeight: 18,
+  },
   card: {
     backgroundColor: 'rgba(12, 27, 43, 0.78)',
     borderRadius: ui.radius.lg,
@@ -673,6 +822,45 @@ const styles = StyleSheet.create({
   detailValue: {
     color: ui.colors.text,
     fontSize: 15,
+  },
+  inlineActions: {
+    gap: 8,
+  },
+  relationBlock: {
+    gap: 8,
+  },
+  relatedList: {
+    gap: 8,
+  },
+  relatedCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: 'rgba(9, 18, 29, 0.72)',
+    borderWidth: 1,
+    borderColor: 'rgba(25, 56, 82, 0.28)',
+  },
+  taskContent: {
+    flex: 1,
+    gap: 4,
+  },
+  relatedMeta: {
+    color: ui.colors.textMuted,
+    fontSize: 12,
+  },
+  historyCard: {
+    gap: 4,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: 'rgba(9, 18, 29, 0.72)',
+    borderWidth: 1,
+    borderColor: 'rgba(25, 56, 82, 0.28)',
+  },
+  historyLabel: {
+    color: ui.colors.text,
+    fontSize: 14,
   },
   input: {
     minHeight: 46,

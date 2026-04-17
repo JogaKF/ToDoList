@@ -43,6 +43,14 @@ export const itemsService = {
     return buildItemTree(items);
   },
 
+  getRelations(db: SQLiteDatabase, itemId: string) {
+    return itemsRepository.getRelations(db, itemId);
+  },
+
+  getActivity(db: SQLiteDatabase, itemId: string) {
+    return itemsRepository.getActivity(db, itemId);
+  },
+
   getMyDay(db: SQLiteDatabase, dateKey = todayKey()) {
     return itemsRepository.getMyDay(db, dateKey);
   },

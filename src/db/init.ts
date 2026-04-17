@@ -44,6 +44,14 @@ export async function initDatabase(db: SQLiteDatabase) {
       value TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS item_activity (
+      id TEXT PRIMARY KEY NOT NULL,
+      itemId TEXT NOT NULL,
+      action TEXT NOT NULL,
+      label TEXT NOT NULL,
+      createdAt TEXT NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_lists_deletedAt ON lists(deletedAt);
     CREATE INDEX IF NOT EXISTS idx_lists_position ON lists(position);
     CREATE INDEX IF NOT EXISTS idx_items_listId ON items(listId);
@@ -51,6 +59,8 @@ export async function initDatabase(db: SQLiteDatabase) {
     CREATE INDEX IF NOT EXISTS idx_items_deletedAt ON items(deletedAt);
     CREATE INDEX IF NOT EXISTS idx_items_myDayDate ON items(myDayDate);
     CREATE INDEX IF NOT EXISTS idx_items_position ON items(position);
+    CREATE INDEX IF NOT EXISTS idx_item_activity_itemId ON item_activity(itemId);
+    CREATE INDEX IF NOT EXISTS idx_item_activity_createdAt ON item_activity(createdAt);
   `);
 
   await ensureItemsColumns(db);
