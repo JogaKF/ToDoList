@@ -29,6 +29,11 @@ export async function initDatabase(db: SQLiteDatabase) {
       deletedAt TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY NOT NULL,
+      value TEXT
+    );
+
     CREATE INDEX IF NOT EXISTS idx_lists_deletedAt ON lists(deletedAt);
     CREATE INDEX IF NOT EXISTS idx_lists_position ON lists(position);
     CREATE INDEX IF NOT EXISTS idx_items_listId ON items(listId);

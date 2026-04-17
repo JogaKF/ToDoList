@@ -9,4 +9,5 @@ export type HomeTabParamList = {
   Lists: undefined;
   MyDay: undefined;
   Trash: undefined;
+  Settings: undefined;
 };

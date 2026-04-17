@@ -8,6 +8,7 @@ import { IconButton } from '../components/common/IconButton';
 import { PrimaryButton } from '../components/common/PrimaryButton';
 import { ScreenContainer } from '../components/common/ScreenContainer';
 import { StateCard } from '../components/common/StateCard';
+import { useI18n } from '../app/providers/PreferencesProvider';
 import { useAppDatabase } from '../db/sqlite';
 import { listsService } from '../features/lists/service';
 import type { TodoList, TodoListSummary } from '../features/lists/types';
@@ -21,6 +22,7 @@ export function ListsScreen() {
   const db = useAppDatabase();
   const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation<Navigation>();
+  const t = useI18n();
   const [lists, setLists] = useState<TodoList[]>([]);
   const [summaries, setSummaries] = useState<Record<string, TodoListSummary>>({});
   const [newListName, setNewListName] = useState('');
@@ -99,14 +101,12 @@ export function ListsScreen() {
     <ScreenContainer bottomInset={tabBarHeight + 16}>
       <View style={styles.hero}>
         <Text style={styles.eyebrow}>Offline-first command center</Text>
-        <Text style={styles.title}>Twoje listy</Text>
-        <Text style={styles.subtitle}>
-          Wszystko zapisuje sie lokalnie. Szybko, bez internetu, bez chaosu.
-        </Text>
+        <Text style={styles.title}>{t('lists_title')}</Text>
+        <Text style={styles.subtitle}>{t('lists_intro')}</Text>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Utworz nowa liste</Text>
+        <Text style={styles.sectionTitle}>{t('lists_create')}</Text>
         <TextInput
           placeholder="Np. Dom, Praca, Zakupy"
           placeholderTextColor={ui.colors.textSoft}
@@ -123,22 +123,22 @@ export function ListsScreen() {
           onSubmitEditing={() => void handleCreateList()}
         />
         <Text style={styles.inputHint}>
-          {newListError ?? 'Krotka, czytelna nazwa. Wszystko zapisze sie lokalnie.'}
+          {newListError ?? t('lists_name_hint')}
         </Text>
         <View style={styles.typeRow}>
           <PrimaryButton
-            label="Taski"
+            label={t('lists_tasks')}
             onPress={() => setNewListType('tasks')}
             tone={newListType === 'tasks' ? 'primary' : 'muted'}
           />
           <PrimaryButton
-            label="Zakupy"
+            label={t('lists_shopping')}
             onPress={() => setNewListType('shopping')}
             tone={newListType === 'shopping' ? 'primary' : 'muted'}
           />
         </View>
         <PrimaryButton
-          label="Utworz liste"
+          label={t('lists_create_button')}
           leadingIcon="+"
           disabled={!newListName.trim()}
           onPress={() => void handleCreateList()}
@@ -147,15 +147,15 @@ export function ListsScreen() {
 
       {isLoading ? (
         <StateCard
-          title="Laduje lokalne listy"
-          description="Czytam dane z SQLite i przygotowuje Twoje centrum dowodzenia."
+          title={t('details_loading')}
+          description={t('details_loading_hint')}
         />
       ) : null}
 
       {!isLoading && lists.length === 0 ? (
         <StateCard
-          title="Nie masz jeszcze zadnej listy"
-          description="Zacznij od jednej listy i potraktuj ja jak swoje lokalne centrum dowodzenia."
+          title={t('lists_empty')}
+          description={t('lists_empty_hint')}
         />
       ) : null}
 
@@ -233,7 +233,7 @@ export function ListsScreen() {
                 ) : (
                   <>
                     <PrimaryButton
-                      label="Otworz"
+                      label={t('lists_open')}
                       leadingIcon="›"
                       onPress={() => navigation.navigate('ListDetails', { listId: list.id })}
                     />

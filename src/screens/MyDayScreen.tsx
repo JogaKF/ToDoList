@@ -7,6 +7,7 @@ import { IconButton } from '../components/common/IconButton';
 import { PrimaryButton } from '../components/common/PrimaryButton';
 import { ScreenContainer } from '../components/common/ScreenContainer';
 import { StateCard } from '../components/common/StateCard';
+import { useI18n } from '../app/providers/PreferencesProvider';
 import { useAppDatabase } from '../db/sqlite';
 import { buildItemTree, collectExpandableIds, flattenVisibleTree } from '../features/items/tree';
 import { useTreeUiStore } from '../features/items/useTreeUiStore';
@@ -26,6 +27,7 @@ export function MyDayScreen() {
   const db = useAppDatabase();
   const tabBarHeight = useBottomTabBarHeight();
   const { expandedIds, toggleExpanded, expandMany } = useTreeUiStore();
+  const t = useI18n();
   const [items, setItems] = useState<Item[]>([]);
   const [lists, setLists] = useState<TodoList[]>([]);
   const [selectedDate, setSelectedDate] = useState(todayKey());
@@ -107,15 +109,15 @@ export function MyDayScreen() {
 
       {isLoading ? (
         <StateCard
-          title="Laduje plan dnia"
-          description="Zbieram z lokalnej bazy wszystko, co przypisales do wybranego dnia."
+          title={t('my_day_loading')}
+          description={t('my_day_loading_hint')}
         />
       ) : null}
 
       {!isLoading && groupedItems.length === 0 ? (
         <StateCard
-          title="Brak zadan na wybrany dzien"
-          description="Otworz dowolna liste i zaplanuj zadanie na dzis albo jutro bez internetu."
+          title={t('my_day_empty')}
+          description={t('my_day_empty_hint')}
         />
       ) : null}
 

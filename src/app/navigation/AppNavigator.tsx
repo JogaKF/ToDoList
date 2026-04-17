@@ -3,38 +3,30 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useI18n, useTheme } from '../providers/PreferencesProvider';
 import { ui } from '../../theme/ui';
 import { ListsScreen } from '../../screens/ListsScreen';
 import { ListDetailsScreen } from '../../screens/ListDetailsScreen';
 import { MyDayScreen } from '../../screens/MyDayScreen';
 import { TrashScreen } from '../../screens/TrashScreen';
+import { SettingsScreen } from '../../screens/SettingsScreen';
 
 import type { HomeTabParamList, RootStackParamList } from './types';
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const HomeTabs = createBottomTabNavigator<HomeTabParamList>();
 
-const navigationTheme = {
-  ...DefaultTheme,
-  colors: {
-    ...DefaultTheme.colors,
-    background: ui.colors.background,
-    card: ui.colors.panel,
-    primary: ui.colors.primary,
-    border: ui.colors.border,
-    text: ui.colors.text,
-  },
-};
-
 function HomeTabsNavigator() {
   const insets = useSafeAreaInsets();
+  const t = useI18n();
+  const theme = useTheme();
 
   return (
     <HomeTabs.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: ui.colors.primary,
-        tabBarInactiveTintColor: ui.colors.textSoft,
+        tabBarActiveTintColor: theme.primary,
+        tabBarInactiveTintColor: theme.textSoft,
         tabBarLabelStyle: {
           fontSize: 12,
           fontWeight: '800',
@@ -46,8 +38,8 @@ function HomeTabsNavigator() {
           left: 12,
           right: 12,
           bottom: 10,
-          backgroundColor: '#0D1E31',
-          borderTopColor: '#1E4667',
+          backgroundColor: theme.panelStrong,
+          borderTopColor: theme.border,
           borderWidth: 1,
           borderRadius: 24,
           height: 72 + insets.bottom,
@@ -67,27 +59,42 @@ function HomeTabsNavigator() {
         },
       }}
     >
-      <HomeTabs.Screen name="Lists" component={ListsScreen} options={{ title: 'Listy' }} />
-      <HomeTabs.Screen name="MyDay" component={MyDayScreen} options={{ title: 'Moj dzien' }} />
-      <HomeTabs.Screen name="Trash" component={TrashScreen} options={{ title: 'Kosz' }} />
+      <HomeTabs.Screen name="Lists" component={ListsScreen} options={{ title: t('tab_lists') }} />
+      <HomeTabs.Screen name="MyDay" component={MyDayScreen} options={{ title: t('tab_my_day') }} />
+      <HomeTabs.Screen name="Trash" component={TrashScreen} options={{ title: t('tab_trash') }} />
+      <HomeTabs.Screen name="Settings" component={SettingsScreen} options={{ title: t('tab_settings') }} />
     </HomeTabs.Navigator>
   );
 }
 
 export function AppNavigator() {
+  const t = useI18n();
+  const theme = useTheme();
+  const navigationTheme = {
+    ...DefaultTheme,
+    colors: {
+      ...DefaultTheme.colors,
+      background: theme.background,
+      card: theme.panel,
+      primary: theme.primary,
+      border: theme.border,
+      text: theme.text,
+    },
+  };
+
   return (
     <NavigationContainer theme={navigationTheme}>
       <RootStack.Navigator
         screenOptions={{
           headerStyle: {
-            backgroundColor: '#0C1C2E',
+            backgroundColor: theme.panel,
           },
-          headerTintColor: ui.colors.text,
+          headerTintColor: theme.text,
           headerTitleStyle: {
             fontWeight: '800',
           },
           contentStyle: {
-            backgroundColor: ui.colors.background,
+            backgroundColor: theme.background,
           },
         }}
       >
@@ -99,7 +106,7 @@ export function AppNavigator() {
         <RootStack.Screen
           name="ListDetails"
           component={ListDetailsScreen}
-          options={{ title: 'Szczegoly listy' }}
+          options={{ title: t('list_details') }}
         />
       </RootStack.Navigator>
     </NavigationContainer>

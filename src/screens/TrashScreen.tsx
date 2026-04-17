@@ -6,6 +6,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { PrimaryButton } from '../components/common/PrimaryButton';
 import { ScreenContainer } from '../components/common/ScreenContainer';
 import { StateCard } from '../components/common/StateCard';
+import { useI18n } from '../app/providers/PreferencesProvider';
 import { useAppDatabase } from '../db/sqlite';
 import { itemsService } from '../features/items/service';
 import type { DeletedItem } from '../features/items/types';
@@ -16,6 +17,7 @@ import { ui } from '../theme/ui';
 export function TrashScreen() {
   const db = useAppDatabase();
   const tabBarHeight = useBottomTabBarHeight();
+  const t = useI18n();
   const [deletedLists, setDeletedLists] = useState<DeletedTodoList[]>([]);
   const [deletedItems, setDeletedItems] = useState<DeletedItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -54,22 +56,22 @@ export function TrashScreen() {
 
       {isLoading ? (
         <StateCard
-          title="Laduje kosz"
-          description="Sprawdzam lokalnie, co mozna jeszcze przywrocic."
+          title={t('trash_loading')}
+          description={t('trash_loading_hint')}
           tone="warning"
         />
       ) : null}
 
       {!isLoading && deletedLists.length === 0 && deletedItems.length === 0 ? (
         <StateCard
-          title="Kosz jest pusty"
-          description="Soft delete dziala. Gdy cos usuniesz, odzyskasz to tutaj."
+          title={t('trash_empty')}
+          description={t('trash_empty_hint')}
         />
       ) : null}
 
       {deletedLists.length > 0 ? (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Usuniete listy</Text>
+          <Text style={styles.sectionTitle}>{t('trash_deleted_lists')}</Text>
           {deletedLists.map((list) => (
             <View key={list.id} style={styles.card}>
               <View style={styles.cardBody}>
@@ -79,7 +81,7 @@ export function TrashScreen() {
                 </Text>
               </View>
               <PrimaryButton
-                label="Przywroc liste"
+                label={t('trash_restore_list')}
                 onPress={() => {
                   void listsService.restore(db, list.id).then(loadData);
                 }}
@@ -91,7 +93,7 @@ export function TrashScreen() {
 
       {deletedItems.length > 0 ? (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Usuniete elementy</Text>
+          <Text style={styles.sectionTitle}>{t('trash_deleted_items')}</Text>
           {deletedItems.map((item) => (
             <View key={item.id} style={styles.card}>
               <View style={styles.cardBody}>
@@ -101,7 +103,7 @@ export function TrashScreen() {
                 </Text>
               </View>
               <PrimaryButton
-                label="Przywroc element"
+                label={t('trash_restore_item')}
                 tone="muted"
                 onPress={() => {
                   void itemsService.restore(db, item.id).then(loadData);

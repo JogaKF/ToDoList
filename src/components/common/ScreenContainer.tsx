@@ -1,6 +1,7 @@
 import { PropsWithChildren } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 
+import { useTheme } from '../../app/providers/PreferencesProvider';
 import { ui } from '../../theme/ui';
 
 type ScreenContainerProps = PropsWithChildren<{
@@ -8,15 +9,17 @@ type ScreenContainerProps = PropsWithChildren<{
 }>;
 
 export function ScreenContainer({ children, bottomInset = 16 }: ScreenContainerProps) {
+  const theme = useTheme();
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.root}
+      style={[styles.root, { backgroundColor: theme.background }]}
     >
       <View style={styles.backgroundLayer}>
-        <View style={styles.orbPrimary} />
-        <View style={styles.orbSecondary} />
-        <View style={styles.gridLineHorizontal} />
+        <View style={[styles.orbPrimary, { backgroundColor: theme.primary }]} />
+        <View style={[styles.orbSecondary, { backgroundColor: theme.accent }]} />
+        <View style={[styles.gridLineHorizontal, { backgroundColor: theme.border }]} />
       </View>
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: bottomInset }]}
@@ -32,7 +35,6 @@ export function ScreenContainer({ children, bottomInset = 16 }: ScreenContainerP
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: ui.colors.background,
   },
   backgroundLayer: {
     ...StyleSheet.absoluteFillObject,
@@ -45,7 +47,6 @@ const styles = StyleSheet.create({
     width: 260,
     height: 260,
     borderRadius: 999,
-    backgroundColor: '#154D82',
     opacity: 0.28,
   },
   orbSecondary: {
@@ -55,7 +56,6 @@ const styles = StyleSheet.create({
     width: 220,
     height: 220,
     borderRadius: 999,
-    backgroundColor: '#0E6B63',
     opacity: 0.18,
   },
   gridLineHorizontal: {
@@ -64,7 +64,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 1,
-    backgroundColor: '#14314E',
     opacity: 0.55,
   },
   content: {

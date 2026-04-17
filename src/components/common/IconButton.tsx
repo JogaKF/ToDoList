@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text } from 'react-native';
 
+import { useTheme } from '../../app/providers/PreferencesProvider';
 import { ui } from '../../theme/ui';
 
 const ICON_MAP = {
@@ -37,17 +38,16 @@ export function IconButton({
   disabled = false,
   size = 18,
 }: IconButtonProps) {
-  const toneStyle =
-    tone === 'primary' ? styles.primary : tone === 'danger' ? styles.danger : styles.muted;
+  const theme = useTheme();
 
   const iconColor =
     tone === 'primary'
-      ? ui.colors.text
+      ? theme.text
       : tone === 'danger'
-        ? ui.colors.danger
+        ? theme.danger
         : active
-          ? ui.colors.primary
-          : ui.colors.textMuted;
+          ? theme.primary
+          : theme.textMuted;
 
   return (
     <Pressable
@@ -55,8 +55,20 @@ export function IconButton({
       disabled={disabled}
       style={({ pressed }) => [
         styles.button,
-        toneStyle,
-        active && tone === 'muted' && styles.activeMuted,
+        tone === 'primary'
+          ? {
+              backgroundColor: theme.primaryStrong,
+              borderColor: theme.primary,
+            }
+          : tone === 'danger'
+            ? {
+                backgroundColor: '#33131C',
+                borderColor: theme.danger,
+              }
+            : {
+                backgroundColor: theme.panelSoft,
+                borderColor: active ? theme.primary : theme.border,
+              },
         disabled && styles.disabled,
         pressed && !disabled && styles.pressed,
       ]}
@@ -77,22 +89,6 @@ const styles = StyleSheet.create({
   },
   icon: {
     fontWeight: '800',
-  },
-  primary: {
-    backgroundColor: ui.colors.primaryStrong,
-    borderColor: ui.colors.primary,
-  },
-  muted: {
-    backgroundColor: ui.colors.panelSoft,
-    borderColor: ui.colors.border,
-  },
-  activeMuted: {
-    borderColor: ui.colors.primary,
-    backgroundColor: '#12364D',
-  },
-  danger: {
-    backgroundColor: '#33131C',
-    borderColor: ui.colors.danger,
   },
   disabled: {
     opacity: 0.45,

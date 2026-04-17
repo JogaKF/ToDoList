@@ -9,6 +9,7 @@ import { IconButton } from '../components/common/IconButton';
 import { PrimaryButton } from '../components/common/PrimaryButton';
 import { ScreenContainer } from '../components/common/ScreenContainer';
 import { StateCard } from '../components/common/StateCard';
+import { useI18n } from '../app/providers/PreferencesProvider';
 import { useAppDatabase } from '../db/sqlite';
 import { itemsService } from '../features/items/service';
 import { collectExpandableIds, flattenVisibleTree } from '../features/items/tree';
@@ -29,6 +30,7 @@ export function ListDetailsScreen() {
   const navigation = useNavigation<Navigation>();
   const route = useRoute<DetailsRoute>();
   const { expandedIds, toggleExpanded, expandMany, collapseMany } = useTreeUiStore();
+  const t = useI18n();
 
   const [list, setList] = useState<TodoList | null>(null);
   const [tree, setTree] = useState<ItemTreeNode[]>([]);
@@ -270,7 +272,7 @@ export function ListDetailsScreen() {
 
       <View style={styles.composerCard}>
         <Text style={styles.sectionTitle}>
-          {isShoppingList ? 'Nowa pozycja' : 'Nowy task'}
+          {isShoppingList ? t('details_new_item') : t('details_new_task')}
         </Text>
         <TextInput
           value={newTaskTitle}
@@ -294,7 +296,7 @@ export function ListDetailsScreen() {
               : 'Tworz glowny task i potem rozwijaj go subtaskami.')}
         </Text>
         <PrimaryButton
-          label={isShoppingList ? 'Dodaj produkty' : 'Dodaj task'}
+          label={isShoppingList ? t('details_add_product') : t('details_add_task')}
           leadingIcon="+"
           disabled={!newTaskTitle.trim()}
           onPress={() => void handleCreateRootTask()}
@@ -304,12 +306,12 @@ export function ListDetailsScreen() {
       {!isShoppingList && expandableIds.length > 0 ? (
         <View style={styles.toolbarRow}>
           <PrimaryButton
-            label="Rozwin wszystko"
+            label={t('details_expand_all')}
             onPress={() => expandMany(expandableIds)}
             tone="muted"
           />
           <PrimaryButton
-            label="Zwin wszystko"
+            label={t('details_collapse_all')}
             onPress={() => collapseMany(expandableIds)}
             tone="muted"
           />
@@ -329,18 +331,18 @@ export function ListDetailsScreen() {
       <View style={styles.treeWrap}>
         {isLoading ? (
           <StateCard
-            title="Laduje zawartosc listy"
-            description="Buduje lokalne drzewo elementow i porzadkuje widok."
+            title={t('details_loading')}
+            description={t('details_loading_hint')}
           />
         ) : null}
 
         {!isLoading && visibleItems.length === 0 ? (
           <StateCard
-            title={isShoppingList ? 'Lista zakupow jest jeszcze pusta' : 'Ta lista jest jeszcze pusta'}
+            title={isShoppingList ? t('details_empty_shopping') : t('details_empty_tasks')}
             description={
               isShoppingList
-                ? 'Dodaj pierwsze produkty i odhaczaj je podczas zakupow.'
-                : 'Dodaj pierwszy task i buduj drzewo przez subtaski.'
+                ? t('details_empty_shopping_hint')
+                : t('details_empty_tasks_hint')
             }
           />
         ) : null}
