@@ -4,7 +4,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAppDatabase } from '../../db/sqlite';
-import { useTheme } from './PreferencesProvider';
+import { useI18n, useTheme } from './PreferencesProvider';
 import { ui } from '../../theme/ui';
 
 type UndoAction = {
@@ -88,6 +88,7 @@ export function useRecovery() {
 export function UndoBar() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const t = useI18n();
   const { currentUndo, clearUndoAction, performUndo } = useRecovery();
 
   if (!currentUndo) {
@@ -107,7 +108,7 @@ export function UndoBar() {
       ]}
     >
       <View style={styles.copyWrap}>
-        <Text style={[styles.title, { color: theme.text }]}>Cofnij ostatnia akcje</Text>
+        <Text style={[styles.title, { color: theme.text }]}>{t('undo_title')}</Text>
         <Text style={[styles.label, { color: theme.textMuted }]} numberOfLines={2}>
           {currentUndo.label}
         </Text>
