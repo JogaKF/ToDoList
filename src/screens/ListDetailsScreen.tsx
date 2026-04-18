@@ -41,6 +41,7 @@ type ShoppingGroup = {
   label: string | null;
   items: ItemTreeNode[];
 };
+type ShoppingTemplate = Pick<ShoppingHistoryEntry, 'title' | 'category' | 'quantity' | 'unit'>;
 
 const recurrenceOptions: RecurrenceType[] = ['none', 'daily', 'weekly', 'monthly', 'weekdays', 'custom'];
 const recurrenceLabels: Record<RecurrenceType, string> = {
@@ -169,6 +170,15 @@ function groupShoppingItems(items: ItemTreeNode[], mode: ShoppingGroupMode) {
   });
 }
 
+function buildTemplateKey(template: ShoppingTemplate) {
+  return [
+    template.title.trim().toLowerCase(),
+    template.category?.trim().toLowerCase() ?? '',
+    template.quantity?.trim() ?? '',
+    template.unit?.trim() ?? '',
+  ].join('|');
+}
+
 export function ListDetailsScreen() {
   const db = useAppDatabase();
   const tabBarHeight = useBottomTabBarHeight();
@@ -187,6 +197,11 @@ export function ListDetailsScreen() {
   const [customCategoryName, setCustomCategoryName] = useState('');
   const [composerQuantity, setComposerQuantity] = useState('');
   const [composerUnit, setComposerUnit] = useState('');
+  const [showShoppingDetails, setShowShoppingDetails] = useState(false);
+  const [showShoppingFavorites, setShowShoppingFavorites] = useState(false);
+  const [showShoppingHistory, setShowShoppingHistory] = useState(false);
+  const [showShoppingCategories, setShowShoppingCategories] = useState(false);
+  const [selectedBrowseCategory, setSelectedBrowseCategory] = useState<string | null>(null);
   const [composerNote, setComposerNote] = useState('');
   const [composerDueDate, setComposerDueDate] = useState('');
   const [composerRecurrenceType, setComposerRecurrenceType] = useState<RecurrenceType>('none');
@@ -256,6 +271,41 @@ export function ListDetailsScreen() {
     const merged = [...defaultShoppingCategories, ...shoppingCategories.map((category) => category.name)];
     return Array.from(new Set(merged.map((name) => name.trim()).filter(Boolean)));
   }, [shoppingCategories]);
+  const shoppingTemplates = useMemo(() => {
+    const deduped = new Map<string, ShoppingTemplate>();
+    [...shoppingFavorites, ...shoppingHistory].forEach((template) => {
+      const key = buildTemplateKey(template);
+      if (!deduped.has(key)) {
+        deduped.set(key, {
+          title: template.title,
+          category: template.category,
+          quantity: template.quantity,
+          unit: template.unit,
+        });
+      }
+    });
+
+    return [...deduped.values()];
+  }, [shoppingFavorites, shoppingHistory]);
+  const shoppingSuggestions = useMemo(() => {
+    const query = newTaskTitle.trim().toLowerCase();
+    if (!isShoppingList || query.length < 2 || /[,;\n]/.test(newTaskTitle)) {
+      return [];
+    }
+
+    return shoppingTemplates
+      .filter((template) => template.title.toLowerCase().includes(query))
+      .slice(0, 6);
+  }, [isShoppingList, newTaskTitle, shoppingTemplates]);
+  const browseCategoryTemplates = useMemo(() => {
+    if (!selectedBrowseCategory) {
+      return [];
+    }
+
+    return shoppingTemplates.filter(
+      (template) => (template.category?.trim().toLowerCase() ?? '') === selectedBrowseCategory.trim().toLowerCase()
+    );
+  }, [selectedBrowseCategory, shoppingTemplates]);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -350,6 +400,14 @@ export function ListDetailsScreen() {
     [db, listId, loadData]
   );
 
+  const handleApplyShoppingTemplateToComposer = useCallback((template: ShoppingTemplate) => {
+    setNewTaskTitle(template.title);
+    setComposerCategory(template.category ?? '');
+    setComposerQuantity(template.quantity ?? '');
+    setComposerUnit(template.unit ?? '');
+    setShowShoppingDetails(Boolean(template.category || template.quantity || template.unit));
+  }, []);
+
   const handleToggleFavorite = useCallback(
     async (input: Pick<ShoppingFavorite, 'title' | 'category' | 'quantity' | 'unit'>) => {
       if (isFavoriteShoppingEntry(input)) {
@@ -405,6 +463,7 @@ export function ListDetailsScreen() {
     setComposerCategory('');
     setComposerQuantity('');
     setComposerUnit('');
+    setSelectedBrowseCategory(null);
     setComposerNote('');
     setComposerDueDate('');
     setComposerRecurrenceType('none');
@@ -921,63 +980,137 @@ export function ListDetailsScreen() {
               ? 'Wpisz wiele produktow naraz, oddzielajac je przecinkiem albo nowa linia.'
               : 'Tworz glowny task i potem rozwijaj go subtaskami.')}
         </Text>
-        {isShoppingList ? (
-          <View style={styles.scheduleRow}>
-            {allShoppingCategoryNames.map((category) => (
-              <PrimaryButton
-                key={`composer-category-${category}`}
-                label={category}
-                tone={composerCategory === category ? 'primary' : 'muted'}
-                onPress={() => setComposerCategory((current) => (current === category ? '' : category))}
-              />
-            ))}
+        {isShoppingList && shoppingSuggestions.length > 0 ? (
+          <View style={styles.shoppingSupportSection}>
+            <Text style={styles.supportTitle}>Podpowiedzi</Text>
+            <View style={styles.supportGrid}>
+              {shoppingSuggestions.map((template, index) => (
+                <Pressable
+                  key={`${buildTemplateKey(template)}-${index}`}
+                  onPress={() => handleApplyShoppingTemplateToComposer(template)}
+                  style={styles.supportCard}
+                >
+                  <Text style={styles.supportCardTitle}>{template.title}</Text>
+                  <Text style={styles.supportCardMeta}>
+                    {[template.category, template.quantity, template.unit].filter(Boolean).join(' • ') || 'Dopelnij i dodaj'}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
           </View>
         ) : null}
         {isShoppingList ? (
-          <View style={styles.scheduleRow}>
-            <TextInput
-              value={customCategoryName}
-              onChangeText={setCustomCategoryName}
-              style={[styles.input, styles.shoppingMetaInput]}
-              placeholder="Nowa kategoria"
-              placeholderTextColor={ui.colors.textSoft}
+          <View style={styles.toolbarRow}>
+            <PrimaryButton
+              label={showShoppingDetails ? 'Ukryj szczegoly' : 'Szczegoly produktu'}
+              tone="muted"
+              onPress={() => setShowShoppingDetails((current) => !current)}
             />
             <PrimaryButton
-              label="Dodaj kategorie"
+              label={showShoppingFavorites ? 'Ukryj ulubione' : 'Ulubione'}
               tone="muted"
-              onPress={() => void handleAddCustomCategory()}
-              disabled={!customCategoryName.trim()}
+              onPress={() => setShowShoppingFavorites((current) => !current)}
+            />
+            <PrimaryButton
+              label={showShoppingHistory ? 'Ukryj historie' : 'Historia'}
+              tone="muted"
+              onPress={() => setShowShoppingHistory((current) => !current)}
+            />
+            <PrimaryButton
+              label={showShoppingCategories ? 'Ukryj kategorie' : 'Kategorie'}
+              tone="muted"
+              onPress={() => setShowShoppingCategories((current) => !current)}
             />
           </View>
         ) : null}
-        {isShoppingList ? (
-          <View style={styles.scheduleRow}>
-            <TextInput
-              value={composerQuantity}
-              onChangeText={setComposerQuantity}
-              style={[styles.input, styles.shoppingMetaInput]}
-              placeholder="Ilosc"
-              placeholderTextColor={ui.colors.textSoft}
-            />
-            <TextInput
-              value={composerUnit}
-              onChangeText={setComposerUnit}
-              style={[styles.input, styles.shoppingMetaInput]}
-              placeholder="Jednostka"
-              placeholderTextColor={ui.colors.textSoft}
-            />
-          </View>
-        ) : null}
-        {isShoppingList ? (
-          <View style={styles.scheduleRow}>
-            {shoppingQuickUnits.map((unit) => (
-              <PrimaryButton
-                key={`composer-unit-${unit}`}
-                label={unit}
-                tone={composerUnit === unit ? 'primary' : 'muted'}
-                onPress={() => setComposerUnit((current) => (current === unit ? '' : unit))}
+        {isShoppingList && showShoppingDetails ? (
+          <View style={styles.detailsEditor}>
+            <View style={styles.scheduleRow}>
+              <TextInput
+                value={composerQuantity}
+                onChangeText={setComposerQuantity}
+                style={[styles.input, styles.shoppingMetaInput]}
+                placeholder="Ilosc"
+                placeholderTextColor={ui.colors.textSoft}
               />
-            ))}
+              <TextInput
+                value={composerUnit}
+                onChangeText={setComposerUnit}
+                style={[styles.input, styles.shoppingMetaInput]}
+                placeholder="Jednostka"
+                placeholderTextColor={ui.colors.textSoft}
+              />
+            </View>
+            <View style={styles.scheduleRow}>
+              {shoppingQuickUnits.map((unit) => (
+                <PrimaryButton
+                  key={`composer-unit-${unit}`}
+                  label={unit}
+                  tone={composerUnit === unit ? 'primary' : 'muted'}
+                  onPress={() => setComposerUnit((current) => (current === unit ? '' : unit))}
+                />
+              ))}
+            </View>
+            <View style={styles.scheduleRow}>
+              {allShoppingCategoryNames.map((category) => (
+                <PrimaryButton
+                  key={`composer-category-${category}`}
+                  label={category}
+                  tone={composerCategory === category ? 'primary' : 'muted'}
+                  onPress={() => setComposerCategory((current) => (current === category ? '' : category))}
+                />
+              ))}
+            </View>
+          </View>
+        ) : null}
+        {isShoppingList && showShoppingCategories ? (
+          <View style={styles.shoppingSupportSection}>
+            <Text style={styles.supportTitle}>Kategorie i katalog</Text>
+            <View style={styles.scheduleRow}>
+              {allShoppingCategoryNames.map((category) => (
+                <PrimaryButton
+                  key={`browse-${category}`}
+                  label={category}
+                  tone={selectedBrowseCategory === category ? 'primary' : 'muted'}
+                  onPress={() => setSelectedBrowseCategory((current) => (current === category ? null : category))}
+                />
+              ))}
+            </View>
+            <View style={styles.scheduleRow}>
+              <TextInput
+                value={customCategoryName}
+                onChangeText={setCustomCategoryName}
+                style={[styles.input, styles.shoppingMetaInput]}
+                placeholder="Nowa kategoria"
+                placeholderTextColor={ui.colors.textSoft}
+              />
+              <PrimaryButton
+                label="Dodaj kategorie"
+                tone="muted"
+                onPress={() => void handleAddCustomCategory()}
+                disabled={!customCategoryName.trim()}
+              />
+            </View>
+            {selectedBrowseCategory ? (
+              <View style={styles.supportGrid}>
+                {browseCategoryTemplates.length > 0 ? (
+                  browseCategoryTemplates.map((template, index) => (
+                    <Pressable
+                      key={`${buildTemplateKey(template)}-browse-${index}`}
+                      onPress={() => void handleCreateFromShoppingTemplate(template)}
+                      style={styles.supportCard}
+                    >
+                      <Text style={styles.supportCardTitle}>{template.title}</Text>
+                      <Text style={styles.supportCardMeta}>
+                        {[template.quantity, template.unit].filter(Boolean).join(' ') || selectedBrowseCategory}
+                      </Text>
+                    </Pressable>
+                  ))
+                ) : (
+                  <Text style={styles.inputHintInline}>Brak zapisanych produktow w tej kategorii.</Text>
+                )}
+              </View>
+            ) : null}
           </View>
         ) : null}
         <PrimaryButton
@@ -1066,14 +1199,14 @@ export function ListDetailsScreen() {
           </>
         ) : null}
 
-        {isShoppingList && shoppingFavorites.length > 0 ? (
+        {isShoppingList && showShoppingFavorites && shoppingFavorites.length > 0 ? (
           <View style={styles.shoppingSupportSection}>
             <Text style={styles.supportTitle}>Ulubione produkty</Text>
             <View style={styles.supportGrid}>
               {shoppingFavorites.slice(0, 8).map((favorite) => (
                 <Pressable
                   key={favorite.id}
-                  onPress={() => void handleCreateFromShoppingTemplate(favorite)}
+                  onPress={() => handleApplyShoppingTemplateToComposer(favorite)}
                   style={styles.supportCard}
                 >
                   <Text style={styles.supportCardTitle}>{favorite.title}</Text>
@@ -1086,14 +1219,14 @@ export function ListDetailsScreen() {
           </View>
         ) : null}
 
-        {isShoppingList && shoppingHistory.length > 0 ? (
+        {isShoppingList && showShoppingHistory && shoppingHistory.length > 0 ? (
           <View style={styles.shoppingSupportSection}>
             <Text style={styles.supportTitle}>Dodaj z historii</Text>
             <View style={styles.supportGrid}>
               {shoppingHistory.slice(0, 10).map((entry, index) => (
                 <Pressable
                   key={`${entry.title}-${entry.category ?? 'none'}-${index}`}
-                  onPress={() => void handleCreateFromShoppingTemplate(entry)}
+                  onPress={() => handleApplyShoppingTemplateToComposer(entry)}
                   style={styles.supportCard}
                 >
                   <Text style={styles.supportCardTitle}>{entry.title}</Text>
