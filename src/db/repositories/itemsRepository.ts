@@ -1,17 +1,9 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import type {
-  DeletedItem,
   Item,
-  ItemActivity,
-  ItemRelations,
-  PlannedTask,
   RecurrenceType,
-  RelatedTaskPreview,
   SeriesEditScope,
-  ShoppingCategory,
-  ShoppingFavorite,
-  ShoppingHistoryEntry,
 } from '../../features/items/types';
 import { createId } from '../../utils/id';
 import { nowIso } from '../../utils/date';

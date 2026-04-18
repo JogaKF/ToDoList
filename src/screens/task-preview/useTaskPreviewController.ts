@@ -9,8 +9,6 @@ import type {
   Item,
   ItemActivity,
   ItemRelations,
-  RecurrenceType,
-  RecurrenceUnit,
   SeriesEditScope,
   ShoppingCategory,
   ShoppingFavorite,

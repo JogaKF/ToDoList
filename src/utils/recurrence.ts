@@ -1,5 +1,5 @@
 import type { RecurrenceType, RecurrenceUnit } from '../features/items/types';
-import { addDays, addMonths, isValidDateKey, parseDateKey, toDateKey, todayKey } from './date';
+import { addDays, addMonths, isValidDateKey, parseDateKey, todayKey } from './date';
 
 type ParsedRecurrenceConfig = {
   interval: number;

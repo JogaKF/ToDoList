@@ -4,7 +4,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { UndoBar, useRecovery } from '../../app/providers/RecoveryProvider';
 import { useTheme } from '../../app/providers/PreferencesProvider';
-import { ui } from '../../theme/ui';
 
 type ScreenContainerProps = PropsWithChildren<{
   bottomInset?: number;

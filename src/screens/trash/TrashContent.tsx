@@ -11,7 +11,7 @@ import { styles } from './styles';
 type TrashContentProps = {
   t: (key: TranslationKey) => string;
   bottomInset: number;
-  deletedListSummaries: Array<DeletedTodoList & { itemCount: number }>;
+  deletedListSummaries: (DeletedTodoList & { itemCount: number })[];
   deletedItemBranches: DeletedItemBranch[];
   isLoading: boolean;
   onClearTrash: () => void;

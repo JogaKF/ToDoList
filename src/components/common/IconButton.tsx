@@ -1,7 +1,6 @@
 import { Pressable, StyleSheet, Text } from 'react-native';
 
 import { useTheme } from '../../app/providers/PreferencesProvider';
-import { ui } from '../../theme/ui';
 
 const ICON_MAP = {
   'arrow-up': '↑',

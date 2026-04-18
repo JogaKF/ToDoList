@@ -4,7 +4,7 @@ import { PrimaryButton } from '../../components/common/PrimaryButton';
 import type { TranslationKey } from '../../app/providers/PreferencesProvider';
 import type { ShoppingFavorite, ShoppingHistoryEntry } from '../../features/items/types';
 import { ui } from '../../theme/ui';
-import { dateKeyWithOffset, formatDateLabel, todayKey } from '../../utils/date';
+import { dateKeyWithOffset, todayKey } from '../../utils/date';
 import { recurrenceLabels, recurrenceOptions, shoppingQuickUnits } from './constants';
 import type { ShoppingTemplate } from './helpers';
 import { buildTemplateKey } from './helpers';

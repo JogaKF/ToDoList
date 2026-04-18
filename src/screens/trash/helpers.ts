@@ -29,11 +29,11 @@ export function buildDeletedItemBranches(deletedItems: DeletedItem[]) {
       const titles: string[] = [];
       let totalItems = 0;
 
-        const visit = (node: DeletedItem) => {
-          totalItems += 1;
+      const visit = (node: DeletedItem) => {
+        totalItems += 1;
         if (titles.length < TRASH_PREVIEW_LIMIT) {
-            titles.push(node.title);
-          }
+          titles.push(node.title);
+        }
 
         for (const child of childrenByParent.get(node.id) ?? []) {
           visit(child);

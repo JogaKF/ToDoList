@@ -5,7 +5,6 @@ import { todayKey } from '../../utils/date';
 
 import type {
   Item,
-  PlannedTask,
   RecurrenceConfig,
   RecurrenceType,
   RecurrenceUnit,
