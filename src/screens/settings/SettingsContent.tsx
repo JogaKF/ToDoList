@@ -1,0 +1,163 @@
+import { Text, View } from 'react-native';
+
+import type {
+  TranslationKey,
+  ShoppingGroupPreference,
+  ShoppingSortPreference,
+  StartTab,
+} from '../../app/providers/PreferencesProvider';
+import { PrimaryButton } from '../../components/common/PrimaryButton';
+import { ScreenContainer } from '../../components/common/ScreenContainer';
+import { StateCard } from '../../components/common/StateCard';
+import { ColorPickerRow } from './ColorPickerRow';
+import {
+  backgroundOptions,
+  panelOptions,
+  primaryOptions,
+  shoppingGroupOptions,
+  shoppingSortOptions,
+  startTabOptions,
+  themeOptions,
+} from './constants';
+import { getStartTabTranslationKey } from './helpers';
+import { styles } from './styles';
+
+type SettingsContentProps = {
+  t: (key: TranslationKey) => string;
+  bottomInset: number;
+  language: 'pl' | 'en';
+  themeId: string;
+  showCompleted: boolean;
+  startTab: StartTab;
+  shoppingSortMode: ShoppingSortPreference;
+  shoppingGroupMode: ShoppingGroupPreference;
+  background: string;
+  panel: string;
+  primary: string;
+  onSetLanguage: (value: 'pl' | 'en') => void;
+  onSetTheme: (value: string) => void;
+  onSetShowCompleted: (value: boolean) => void;
+  onSetStartTab: (value: StartTab) => void;
+  onSetShoppingSortMode: (value: ShoppingSortPreference) => void;
+  onSetShoppingGroupMode: (value: ShoppingGroupPreference) => void;
+  onSetBackground: (value: string) => void;
+  onSetPanel: (value: string) => void;
+  onSetPrimary: (value: string) => void;
+  onApplyCustomColors: () => void;
+};
+
+export function SettingsContent({
+  t,
+  bottomInset,
+  language,
+  themeId,
+  showCompleted,
+  startTab,
+  shoppingSortMode,
+  shoppingGroupMode,
+  background,
+  panel,
+  primary,
+  onSetLanguage,
+  onSetTheme,
+  onSetShowCompleted,
+  onSetStartTab,
+  onSetShoppingSortMode,
+  onSetShoppingGroupMode,
+  onSetBackground,
+  onSetPanel,
+  onSetPrimary,
+  onApplyCustomColors,
+}: SettingsContentProps) {
+  return (
+    <ScreenContainer bottomInset={bottomInset}>
+      <View style={styles.hero}>
+        <Text style={styles.title}>{t('settings_title')}</Text>
+        <Text style={styles.subtitle}>{t('settings_intro')}</Text>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>{t('settings_theme_section')}</Text>
+        <Text style={styles.sectionHint}>{t('settings_theme_hint')}</Text>
+        <View style={styles.optionGrid}>
+          {themeOptions.map((option) => (
+            <PrimaryButton
+              key={option}
+              label={t(`settings_theme_${option}` as TranslationKey)}
+              tone={themeId === option ? 'primary' : 'muted'}
+              onPress={() => onSetTheme(option)}
+            />
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>{t('settings_language_section')}</Text>
+        <Text style={styles.sectionHint}>{t('settings_language_hint')}</Text>
+        <View style={styles.optionGrid}>
+          <PrimaryButton label={t('settings_language_pl')} tone={language === 'pl' ? 'primary' : 'muted'} onPress={() => onSetLanguage('pl')} />
+          <PrimaryButton label={t('settings_language_en')} tone={language === 'en' ? 'primary' : 'muted'} onPress={() => onSetLanguage('en')} />
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>{t('settings_behavior_section')}</Text>
+        <Text style={styles.sectionHint}>{t('settings_behavior_hint')}</Text>
+        <Text style={styles.inputLabel}>{t('settings_show_completed')}</Text>
+        <Text style={styles.sectionHint}>{t('settings_show_completed_hint')}</Text>
+        <View style={styles.optionGrid}>
+          <PrimaryButton label={t('settings_show')} tone={showCompleted ? 'primary' : 'muted'} onPress={() => onSetShowCompleted(true)} />
+          <PrimaryButton label={t('settings_hide')} tone={!showCompleted ? 'primary' : 'muted'} onPress={() => onSetShowCompleted(false)} />
+        </View>
+        <Text style={styles.inputLabel}>{t('settings_start_tab')}</Text>
+        <View style={styles.optionGrid}>
+          {startTabOptions.map((option) => (
+            <PrimaryButton
+              key={option}
+              label={t(getStartTabTranslationKey(option))}
+              tone={startTab === option ? 'primary' : 'muted'}
+              onPress={() => onSetStartTab(option)}
+            />
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>{t('settings_shopping_section')}</Text>
+        <Text style={styles.sectionHint}>{t('settings_shopping_hint')}</Text>
+        <Text style={styles.inputLabel}>{t('settings_shopping_sort')}</Text>
+        <View style={styles.optionGrid}>
+          {shoppingSortOptions.map((option) => (
+            <PrimaryButton
+              key={option}
+              label={t(`settings_shopping_sort_${option}` as TranslationKey)}
+              tone={shoppingSortMode === option ? 'primary' : 'muted'}
+              onPress={() => onSetShoppingSortMode(option)}
+            />
+          ))}
+        </View>
+        <Text style={styles.inputLabel}>{t('settings_shopping_group')}</Text>
+        <View style={styles.optionGrid}>
+          {shoppingGroupOptions.map((option) => (
+            <PrimaryButton
+              key={option}
+              label={t(`settings_shopping_group_${option}` as TranslationKey)}
+              tone={shoppingGroupMode === option ? 'primary' : 'muted'}
+              onPress={() => onSetShoppingGroupMode(option)}
+            />
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>{t('settings_custom_section')}</Text>
+        <Text style={styles.sectionHint}>{t('settings_custom_hint')}</Text>
+        <ColorPickerRow label={t('settings_background')} options={backgroundOptions} selectedColor={background} onSelect={onSetBackground} />
+        <ColorPickerRow label={t('settings_panel')} options={panelOptions} selectedColor={panel} onSelect={onSetPanel} />
+        <ColorPickerRow label={t('settings_primary')} options={primaryOptions} selectedColor={primary} onSelect={onSetPrimary} />
+        <PrimaryButton label={t('settings_apply_custom')} onPress={onApplyCustomColors} />
+        <StateCard title={t('settings_preview_title')} description={t('settings_preview_description')} />
+      </View>
+    </ScreenContainer>
+  );
+}

@@ -16,6 +16,30 @@ import type {
 import { createId } from '../../utils/id';
 import { nowIso } from '../../utils/date';
 import { getNextRecurringDate } from '../../utils/recurrence';
+import {
+  getAncestorIdsQuery,
+  getDescendantIdsQuery,
+  getNextPositionQuery,
+  getSubtreeItemsQuery,
+  logItemActivity,
+} from './itemsRepository.helpers';
+import {
+  getActivity,
+  getDeleted,
+  getMyDay,
+  getPlannedTasks,
+  getRelations,
+  getTasksWithoutDate,
+} from './itemsRepository.reads';
+import {
+  addShoppingCategory,
+  getShoppingCategories,
+  getShoppingFavorites,
+  getShoppingHistory,
+  removeShoppingFavorite,
+  touchShoppingHistory,
+  upsertShoppingFavorite,
+} from './itemsRepository.shopping';
 
 type CreateItemInput = {
   listId: string;
@@ -48,272 +72,17 @@ export const itemsRepository = {
       listId
     );
   },
-
-  async getRelations(db: SQLiteDatabase, itemId: string) {
-    const item = await this.getById(db, itemId);
-    if (!item) {
-      return {
-        parent: null,
-        children: [],
-      } satisfies ItemRelations;
-    }
-
-    const [parent, children] = await Promise.all([
-      item.parentId
-        ? db.getFirstAsync<RelatedTaskPreview>(
-            `SELECT id, title, status, dueDate, myDayDate
-             FROM items
-             WHERE id = ? AND deletedAt IS NULL`,
-            item.parentId
-          )
-        : Promise.resolve(null),
-      db.getAllAsync<RelatedTaskPreview>(
-        `SELECT id, title, status, dueDate, myDayDate
-         FROM items
-         WHERE parentId = ? AND deletedAt IS NULL
-         ORDER BY position ASC, createdAt ASC`,
-        item.id
-      ),
-    ]);
-
-    return {
-      parent: parent ?? null,
-      children,
-    } satisfies ItemRelations;
-  },
-
-  async getActivity(db: SQLiteDatabase, itemId: string) {
-    return db.getAllAsync<ItemActivity>(
-      `SELECT * FROM item_activity
-       WHERE itemId = ?
-       ORDER BY createdAt DESC
-       LIMIT 20`,
-      itemId
-    );
-  },
-
-  async getShoppingCategories(db: SQLiteDatabase) {
-    return db.getAllAsync<ShoppingCategory>(
-      `SELECT * FROM shopping_categories
-       ORDER BY name COLLATE NOCASE ASC`
-    );
-  },
-
-  async addShoppingCategory(db: SQLiteDatabase, name: string) {
-    const trimmed = name.trim();
-    if (!trimmed) {
-      return null;
-    }
-
-    const existing = await db.getFirstAsync<ShoppingCategory>(
-      `SELECT * FROM shopping_categories
-       WHERE LOWER(name) = LOWER(?)`,
-      trimmed
-    );
-
-    if (existing) {
-      return existing;
-    }
-
-    const category: ShoppingCategory = {
-      id: createId('shopcat'),
-      name: trimmed,
-      createdAt: nowIso(),
-    };
-
-    await db.runAsync(
-      `INSERT INTO shopping_categories (id, name, createdAt)
-       VALUES (?, ?, ?)`,
-      category.id,
-      category.name,
-      category.createdAt
-    );
-
-    return category;
-  },
-
-  async getShoppingFavorites(db: SQLiteDatabase) {
-    return db.getAllAsync<ShoppingFavorite>(
-      `SELECT * FROM shopping_favorites
-       ORDER BY lastUsedAt DESC, title COLLATE NOCASE ASC`
-    );
-  },
-
-  async upsertShoppingFavorite(
-    db: SQLiteDatabase,
-    input: Pick<ShoppingFavorite, 'title' | 'category' | 'quantity' | 'unit'>
-  ) {
-    const title = input.title.trim();
-    if (!title) {
-      return null;
-    }
-
-    const category = input.category?.trim() ? input.category.trim() : null;
-    const quantity = input.quantity?.trim() ? input.quantity.trim() : null;
-    const unit = input.unit?.trim() ? input.unit.trim() : null;
-    const timestamp = nowIso();
-
-    const existing = await db.getFirstAsync<ShoppingFavorite>(
-      `SELECT * FROM shopping_favorites
-       WHERE LOWER(title) = LOWER(?)
-         AND COALESCE(LOWER(category), '') = COALESCE(LOWER(?), '')
-         AND COALESCE(quantity, '') = COALESCE(?, '')
-         AND COALESCE(unit, '') = COALESCE(?, '')`,
-      title,
-      category,
-      quantity,
-      unit
-    );
-
-    if (existing) {
-      await db.runAsync(
-        `UPDATE shopping_favorites
-         SET updatedAt = ?, lastUsedAt = ?
-         WHERE id = ?`,
-        timestamp,
-        timestamp,
-        existing.id
-      );
-
-      return {
-        ...existing,
-        updatedAt: timestamp,
-        lastUsedAt: timestamp,
-      };
-    }
-
-    const favorite: ShoppingFavorite = {
-      id: createId('shopfav'),
-      title,
-      category,
-      quantity,
-      unit,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-      lastUsedAt: timestamp,
-    };
-
-    await db.runAsync(
-      `INSERT INTO shopping_favorites (id, title, category, quantity, unit, createdAt, updatedAt, lastUsedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      favorite.id,
-      favorite.title,
-      favorite.category,
-      favorite.quantity,
-      favorite.unit,
-      favorite.createdAt,
-      favorite.updatedAt,
-      favorite.lastUsedAt
-    );
-
-    return favorite;
-  },
-
-  async removeShoppingFavorite(
-    db: SQLiteDatabase,
-    input: Pick<ShoppingFavorite, 'title' | 'category' | 'quantity' | 'unit'>
-  ) {
-    await db.runAsync(
-      `DELETE FROM shopping_favorites
-       WHERE LOWER(title) = LOWER(?)
-         AND COALESCE(LOWER(category), '') = COALESCE(LOWER(?), '')
-         AND COALESCE(quantity, '') = COALESCE(?, '')
-         AND COALESCE(unit, '') = COALESCE(?, '')`,
-      input.title.trim(),
-      input.category?.trim() ? input.category.trim() : null,
-      input.quantity?.trim() ? input.quantity.trim() : null,
-      input.unit?.trim() ? input.unit.trim() : null
-    );
-  },
-
-  async touchShoppingHistory(
-    db: SQLiteDatabase,
-    input: Pick<Item, 'title' | 'category' | 'quantity' | 'unit'>
-  ) {
-    const title = input.title.trim();
-    if (!title) {
-      return;
-    }
-
-    const timestamp = nowIso();
-    const existing = await db.getFirstAsync<ShoppingFavorite>(
-      `SELECT * FROM shopping_favorites
-       WHERE LOWER(title) = LOWER(?)
-         AND COALESCE(LOWER(category), '') = COALESCE(LOWER(?), '')
-         AND COALESCE(quantity, '') = COALESCE(?, '')
-         AND COALESCE(unit, '') = COALESCE(?, '')`,
-      title,
-      input.category?.trim() ? input.category.trim() : null,
-      input.quantity?.trim() ? input.quantity.trim() : null,
-      input.unit?.trim() ? input.unit.trim() : null
-    );
-
-    if (existing) {
-      await db.runAsync(
-        `UPDATE shopping_favorites
-         SET lastUsedAt = ?, updatedAt = ?
-         WHERE id = ?`,
-        timestamp,
-        timestamp,
-        existing.id
-      );
-    }
-  },
-
-  async getShoppingHistory(db: SQLiteDatabase, limit = 12) {
-    const allItems = await db.getAllAsync<ShoppingHistoryEntry>(
-      `SELECT title, category, quantity, unit, updatedAt as lastUsedAt
-       FROM items
-       WHERE type = 'shopping'
-       ORDER BY updatedAt DESC
-       LIMIT 120`
-    );
-
-    const seen = new Set<string>();
-    const unique: ShoppingHistoryEntry[] = [];
-
-    for (const item of allItems) {
-      const key = [
-        item.title.trim().toLowerCase(),
-        item.category?.trim().toLowerCase() ?? '',
-        item.quantity?.trim() ?? '',
-        item.unit?.trim() ?? '',
-      ].join('|');
-
-      if (seen.has(key)) {
-        continue;
-      }
-
-      seen.add(key);
-      unique.push(item);
-
-      if (unique.length >= limit) {
-        break;
-      }
-    }
-
-    return unique;
-  },
-
-  async getMyDay(db: SQLiteDatabase, dateKey: string) {
-    return db.getAllAsync<Item>(
-      `SELECT * FROM items
-       WHERE myDayDate = ? AND deletedAt IS NULL
-       ORDER BY position ASC, createdAt ASC`,
-      dateKey
-    );
-  },
-
-  async getDeleted(db: SQLiteDatabase) {
-    return db.getAllAsync<DeletedItem>(
-      `SELECT items.*, lists.name as listName
-       FROM items
-       INNER JOIN lists ON lists.id = items.listId
-       WHERE items.deletedAt IS NOT NULL
-         AND lists.deletedAt IS NULL
-       ORDER BY items.deletedAt DESC, items.updatedAt DESC`
-    );
-  },
+  getRelations,
+  getActivity,
+  getShoppingCategories,
+  addShoppingCategory,
+  getShoppingFavorites,
+  upsertShoppingFavorite,
+  removeShoppingFavorite,
+  touchShoppingHistory,
+  getShoppingHistory,
+  getMyDay,
+  getDeleted,
 
   async create(db: SQLiteDatabase, input: CreateItemInput) {
     const timestamp = nowIso();
@@ -547,35 +316,8 @@ export const itemsRepository = {
     }
   },
 
-  async getPlannedTasks(db: SQLiteDatabase, mode: 'due' | 'myday') {
-    const plannedColumn = mode === 'due' ? 'items.dueDate' : 'items.myDayDate';
-
-    return db.getAllAsync<PlannedTask>(
-      `SELECT items.*, lists.name as listName, ${plannedColumn} as plannedDate
-       FROM items
-       INNER JOIN lists ON lists.id = items.listId
-       WHERE items.deletedAt IS NULL
-         AND lists.deletedAt IS NULL
-         AND items.type = 'task'
-         AND items.status = 'todo'
-         AND ${plannedColumn} IS NOT NULL
-       ORDER BY ${plannedColumn} ASC, items.position ASC, items.createdAt ASC`
-    );
-  },
-
-  async getTasksWithoutDate(db: SQLiteDatabase) {
-    return db.getAllAsync<PlannedTask>(
-      `SELECT items.*, lists.name as listName, items.dueDate as plannedDate
-       FROM items
-       INNER JOIN lists ON lists.id = items.listId
-       WHERE items.deletedAt IS NULL
-         AND lists.deletedAt IS NULL
-         AND items.type = 'task'
-         AND items.status = 'todo'
-         AND items.dueDate IS NULL
-       ORDER BY lists.position ASC, items.position ASC, items.createdAt ASC`
-    );
-  },
+  getPlannedTasks,
+  getTasksWithoutDate,
 
   async moveToParent(db: SQLiteDatabase, item: Item, nextParentId: string | null) {
     const nextPosition = await this.getNextPosition(db, item.listId, nextParentId);
@@ -941,124 +683,9 @@ export const itemsRepository = {
        WHERE deletedAt IS NOT NULL`
     );
   },
-
-  async getDescendantIds(db: SQLiteDatabase, rootId: string, includeDeleted = false) {
-    const allItems = await db.getAllAsync<Pick<Item, 'id' | 'parentId'>>(
-      `SELECT id, parentId FROM items ${includeDeleted ? '' : 'WHERE deletedAt IS NULL'}`
-    );
-
-    const childrenByParent = new Map<string, string[]>();
-    for (const item of allItems) {
-      if (!item.parentId) {
-        continue;
-      }
-
-      const current = childrenByParent.get(item.parentId) ?? [];
-      current.push(item.id);
-      childrenByParent.set(item.parentId, current);
-    }
-
-    const result: string[] = [];
-    const queue = [...(childrenByParent.get(rootId) ?? [])];
-
-    while (queue.length > 0) {
-      const currentId = queue.shift();
-      if (!currentId) {
-        continue;
-      }
-
-      result.push(currentId);
-      queue.push(...(childrenByParent.get(currentId) ?? []));
-    }
-
-    return result;
-  },
-
-  async getSubtreeItems(db: SQLiteDatabase, rootId: string, includeDeleted = false) {
-    const allItems = await db.getAllAsync<Item>(
-      `SELECT * FROM items ${includeDeleted ? '' : 'WHERE deletedAt IS NULL'}`
-    );
-
-    const itemsById = new Map(allItems.map((item) => [item.id, item]));
-    const childrenByParent = new Map<string, Item[]>();
-
-    for (const item of allItems) {
-      if (!item.parentId) {
-        continue;
-      }
-
-      const bucket = childrenByParent.get(item.parentId) ?? [];
-      bucket.push(item);
-      bucket.sort((left, right) => left.position - right.position || left.createdAt.localeCompare(right.createdAt));
-      childrenByParent.set(item.parentId, bucket);
-    }
-
-    const root = itemsById.get(rootId);
-    if (!root) {
-      return [];
-    }
-
-    const result: Item[] = [];
-    const visit = (current: Item) => {
-      result.push(current);
-      for (const child of childrenByParent.get(current.id) ?? []) {
-        visit(child);
-      }
-    };
-
-    visit(root);
-    return result;
-  },
-
-  async getAncestorIds(db: SQLiteDatabase, parentId: string | null) {
-    if (!parentId) {
-      return [];
-    }
-
-    const allItems = await db.getAllAsync<Pick<Item, 'id' | 'parentId'>>(
-      `SELECT id, parentId FROM items WHERE deletedAt IS NULL`
-    );
-
-    const parentById = new Map<string, string | null>();
-    for (const item of allItems) {
-      parentById.set(item.id, item.parentId);
-    }
-
-    const result: string[] = [];
-    let currentParentId: string | null = parentId;
-
-    while (currentParentId) {
-      result.push(currentParentId);
-      currentParentId = parentById.get(currentParentId) ?? null;
-    }
-
-    return result;
-  },
-
-  async getNextPosition(db: SQLiteDatabase, listId: string, parentId: string | null) {
-    const row = await db.getFirstAsync<{ maxPosition: number | null }>(
-      `SELECT MAX(position) as maxPosition
-       FROM items
-       WHERE listId = ?
-         AND deletedAt IS NULL
-         AND ((parentId IS NULL AND ? IS NULL) OR parentId = ?)`,
-      listId,
-      parentId,
-      parentId
-    );
-
-    return (row?.maxPosition ?? 0) + 1000;
-  },
-
-  async logActivity(db: SQLiteDatabase, itemId: string, action: string, label: string) {
-    await db.runAsync(
-      `INSERT INTO item_activity (id, itemId, action, label, createdAt)
-       VALUES (?, ?, ?, ?, ?)`,
-      createId('activity'),
-      itemId,
-      action,
-      label,
-      nowIso()
-    );
-  },
+  getDescendantIds: getDescendantIdsQuery,
+  getSubtreeItems: getSubtreeItemsQuery,
+  getAncestorIds: getAncestorIdsQuery,
+  getNextPosition: getNextPositionQuery,
+  logActivity: logItemActivity,
 };
