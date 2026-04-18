@@ -12,3 +12,4 @@ export const primaryOptions = ['#1499C8', '#3BD6C6', '#FF7B54', '#7DB6FF', '#9BE
 export const startTabOptions: StartTab[] = ['Lists', 'Planner', 'MyDay', 'Trash', 'Settings'];
 export const shoppingSortOptions: ShoppingSortPreference[] = ['manual', 'alpha'];
 export const shoppingGroupOptions: ShoppingGroupPreference[] = ['flat', 'unit', 'category'];
+export const backupImportTypes = ['application/json', 'text/plain'] as const;

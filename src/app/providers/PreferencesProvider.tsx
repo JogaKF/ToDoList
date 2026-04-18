@@ -30,6 +30,7 @@ type PreferencesContextValue = {
   setStartTab: (tab: StartTab) => Promise<void>;
   setShoppingSortMode: (mode: ShoppingSortPreference) => Promise<void>;
   setShoppingGroupMode: (mode: ShoppingGroupPreference) => Promise<void>;
+  reloadPreferences: () => Promise<void>;
 };
 
 const translations = {
@@ -50,6 +51,25 @@ const translations = {
     settings_language_hint: 'Na start udostepniamy polski i angielski.',
     settings_custom_section: 'Wlasne kolory',
     settings_custom_hint: 'Mozesz nadpisac tlo, panel i glowny kolor akcji.',
+    settings_backup_section: 'Backup danych',
+    settings_backup_hint: 'Wyeksportuj wszystko do JSON albo nadpisz lokalna baze plikiem backupu.',
+    settings_backup_export: 'Eksportuj JSON',
+    settings_backup_import: 'Importuj plik',
+    settings_backup_confirm_title: 'Nadpisac lokalne dane?',
+    settings_backup_confirm_hint: 'Import zastapi aktualne listy, zadania, kosz, ustawienia i historie zmian.',
+    settings_backup_status_shared: 'Backup zapisany i gotowy do udostepnienia.',
+    settings_backup_status_saved: 'Backup zapisany lokalnie w katalogu dokumentow aplikacji.',
+    settings_backup_status_imported: 'Backup zostal wczytany do lokalnej bazy.',
+    settings_backup_status_error: 'Nie udalo sie przetworzyc pliku backupu.',
+    settings_backup_status_idle: 'JSON obejmuje listy, zadania, ustawienia, kosz, historie i zakupy.',
+    settings_backup_file_label: 'Plik backupu',
+    settings_backup_summary_lists: 'Listy',
+    settings_backup_summary_items: 'Elementy',
+    settings_backup_summary_deleted: 'Usuniete',
+    settings_backup_summary_settings: 'Ustawienia',
+    settings_backup_summary_activity: 'Historia',
+    settings_backup_summary_categories: 'Kategorie',
+    settings_backup_summary_favorites: 'Ulubione',
     settings_background: 'Tlo',
     settings_panel: 'Panel',
     settings_primary: 'Akcent',
@@ -148,6 +168,25 @@ const translations = {
     settings_language_hint: 'For now we support Polish and English.',
     settings_custom_section: 'Custom colors',
     settings_custom_hint: 'You can override background, panel and primary action color.',
+    settings_backup_section: 'Data backup',
+    settings_backup_hint: 'Export everything to JSON or replace the local database from a backup file.',
+    settings_backup_export: 'Export JSON',
+    settings_backup_import: 'Import file',
+    settings_backup_confirm_title: 'Replace local data?',
+    settings_backup_confirm_hint: 'Import will replace the current lists, tasks, trash, settings and activity history.',
+    settings_backup_status_shared: 'Backup saved and ready to share.',
+    settings_backup_status_saved: 'Backup saved locally in the app documents directory.',
+    settings_backup_status_imported: 'Backup has been imported into local storage.',
+    settings_backup_status_error: 'Backup file could not be processed.',
+    settings_backup_status_idle: 'The JSON contains lists, tasks, settings, trash, history and shopping data.',
+    settings_backup_file_label: 'Backup file',
+    settings_backup_summary_lists: 'Lists',
+    settings_backup_summary_items: 'Items',
+    settings_backup_summary_deleted: 'Deleted',
+    settings_backup_summary_settings: 'Settings',
+    settings_backup_summary_activity: 'History',
+    settings_backup_summary_categories: 'Categories',
+    settings_backup_summary_favorites: 'Favorites',
     settings_background: 'Background',
     settings_panel: 'Panel',
     settings_primary: 'Accent',
@@ -260,47 +299,51 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
     primary: '',
   });
 
+  const loadPreferences = useCallback(async () => {
+    const values = await settingsRepository.getAll(db);
+    const nextLanguage = values.language === 'en' ? 'en' : 'pl';
+    const nextThemeId = (values.themeId as ThemeId) || 'cyber';
+    const nextShowCompleted = values.showCompleted !== 'false';
+    const nextStartTab =
+      values.startTab === 'Planner' || values.startTab === 'MyDay' || values.startTab === 'Trash' || values.startTab === 'Settings'
+        ? (values.startTab as StartTab)
+        : 'Lists';
+    const nextShoppingSortMode = values.shoppingSortMode === 'alpha' ? 'alpha' : 'manual';
+    const nextShoppingGroupMode =
+      values.shoppingGroupMode === 'unit' || values.shoppingGroupMode === 'category'
+        ? (values.shoppingGroupMode as ShoppingGroupPreference)
+        : 'flat';
+    const nextCustom = {
+      background: values.customBackground ?? '',
+      panel: values.customPanel ?? '',
+      primary: values.customPrimary ?? '',
+    };
+    const nextTheme =
+      nextThemeId === 'custom'
+        ? buildCustomTheme(nextCustom)
+        : themePresets[(nextThemeId as Exclude<ThemeId, 'custom'>) || 'cyber'];
+
+    setLanguageState(nextLanguage);
+    setThemeIdState(nextThemeId);
+    setShowCompletedState(nextShowCompleted);
+    setStartTabState(nextStartTab);
+    setShoppingSortModeState(nextShoppingSortMode);
+    setShoppingGroupModeState(nextShoppingGroupMode);
+    setCustomColorsState(nextCustom);
+    setThemeState(nextTheme);
+    applyTheme(nextTheme);
+    setIsReady(true);
+  }, [db]);
+
   useEffect(() => {
     let isMounted = true;
 
     const load = async () => {
-      const values = await settingsRepository.getAll(db);
       if (!isMounted) {
         return;
       }
 
-      const nextLanguage = values.language === 'en' ? 'en' : 'pl';
-      const nextThemeId = (values.themeId as ThemeId) || 'cyber';
-      const nextShowCompleted = values.showCompleted !== 'false';
-      const nextStartTab =
-        values.startTab === 'Planner' || values.startTab === 'MyDay' || values.startTab === 'Trash' || values.startTab === 'Settings'
-          ? (values.startTab as StartTab)
-          : 'Lists';
-      const nextShoppingSortMode = values.shoppingSortMode === 'alpha' ? 'alpha' : 'manual';
-      const nextShoppingGroupMode =
-        values.shoppingGroupMode === 'unit' || values.shoppingGroupMode === 'category'
-          ? (values.shoppingGroupMode as ShoppingGroupPreference)
-          : 'flat';
-      const nextCustom = {
-        background: values.customBackground ?? '',
-        panel: values.customPanel ?? '',
-        primary: values.customPrimary ?? '',
-      };
-
-      setLanguageState(nextLanguage);
-      setThemeIdState(nextThemeId);
-      setShowCompletedState(nextShowCompleted);
-      setStartTabState(nextStartTab);
-      setShoppingSortModeState(nextShoppingSortMode);
-      setShoppingGroupModeState(nextShoppingGroupMode);
-      setCustomColorsState(nextCustom);
-      const nextTheme =
-        nextThemeId === 'custom'
-          ? buildCustomTheme(nextCustom)
-          : themePresets[(nextThemeId as Exclude<ThemeId, 'custom'>) || 'cyber'];
-      setThemeState(nextTheme);
-      applyTheme(nextTheme);
-      setIsReady(true);
+      await loadPreferences();
     };
 
     void load();
@@ -308,7 +351,7 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
     return () => {
       isMounted = false;
     };
-  }, [db]);
+  }, [loadPreferences]);
 
   const setLanguage = useCallback(
     async (nextLanguage: Language) => {
@@ -406,11 +449,13 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
       setStartTab,
       setShoppingSortMode,
       setShoppingGroupMode,
+      reloadPreferences: loadPreferences,
     }),
     [
       customColors,
       isReady,
       language,
+      loadPreferences,
       setCustomColors,
       setLanguage,
       setShoppingGroupMode,

@@ -19,8 +19,9 @@ import {
   startTabOptions,
   themeOptions,
 } from './constants';
-import { getStartTabTranslationKey } from './helpers';
+import { getBackupStatusCopy, getStartTabTranslationKey } from './helpers';
 import { styles } from './styles';
+import type { BackupStatus } from './types';
 
 type SettingsContentProps = {
   t: (key: TranslationKey) => string;
@@ -44,6 +45,10 @@ type SettingsContentProps = {
   onSetPanel: (value: string) => void;
   onSetPrimary: (value: string) => void;
   onApplyCustomColors: () => void;
+  isBackupBusy: boolean;
+  backupStatus: BackupStatus;
+  onExportBackup: () => void;
+  onImportBackup: () => void;
 };
 
 export function SettingsContent({
@@ -68,7 +73,13 @@ export function SettingsContent({
   onSetPanel,
   onSetPrimary,
   onApplyCustomColors,
+  isBackupBusy,
+  backupStatus,
+  onExportBackup,
+  onImportBackup,
 }: SettingsContentProps) {
+  const backupCard = getBackupStatusCopy(t, backupStatus);
+
   return (
     <ScreenContainer bottomInset={bottomInset}>
       <View style={styles.hero}>
@@ -157,6 +168,16 @@ export function SettingsContent({
         <ColorPickerRow label={t('settings_primary')} options={primaryOptions} selectedColor={primary} onSelect={onSetPrimary} />
         <PrimaryButton label={t('settings_apply_custom')} onPress={onApplyCustomColors} />
         <StateCard title={t('settings_preview_title')} description={t('settings_preview_description')} />
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>{t('settings_backup_section')}</Text>
+        <Text style={styles.sectionHint}>{t('settings_backup_hint')}</Text>
+        <View style={styles.optionGrid}>
+          <PrimaryButton label={t('settings_backup_export')} disabled={isBackupBusy} onPress={onExportBackup} />
+          <PrimaryButton label={t('settings_backup_import')} tone="muted" disabled={isBackupBusy} onPress={onImportBackup} />
+        </View>
+        <StateCard title={backupCard.title} description={backupCard.description} tone={backupCard.tone} />
       </View>
     </ScreenContainer>
   );

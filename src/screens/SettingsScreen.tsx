@@ -2,12 +2,14 @@ import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 
 import { useI18n } from '../app/providers/PreferencesProvider';
 import { SettingsContent } from './settings/SettingsContent';
+import { useBackupController } from './settings/useBackupController';
 import { useSettingsController } from './settings/useSettingsController';
 
 export function SettingsScreen() {
   const t = useI18n();
   const tabBarHeight = useBottomTabBarHeight();
   const controller = useSettingsController();
+  const backupController = useBackupController();
 
   return (
     <SettingsContent
@@ -38,6 +40,10 @@ export function SettingsScreen() {
           primary: controller.primary,
         })
       }
+      isBackupBusy={backupController.isBackupBusy}
+      backupStatus={backupController.backupStatus}
+      onExportBackup={() => void backupController.handleExportBackup()}
+      onImportBackup={() => void backupController.handleImportBackup()}
     />
   );
 }

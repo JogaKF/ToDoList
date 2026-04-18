@@ -16,6 +16,7 @@ type UndoAction = {
 type RecoveryContextValue = {
   currentUndo: UndoAction | null;
   mutationTick: number;
+  notifyMutation: () => void;
   pushUndoAction: (action: UndoAction) => void;
   clearUndoAction: () => void;
   performUndo: () => Promise<void>;
@@ -50,6 +51,10 @@ export function RecoveryProvider({ children }: PropsWithChildren) {
     setCurrentUndo(null);
   }, []);
 
+  const notifyMutation = useCallback(() => {
+    setMutationTick((current) => current + 1);
+  }, []);
+
   const performUndo = useCallback(async () => {
     if (!currentUndo) {
       return;
@@ -58,18 +63,19 @@ export function RecoveryProvider({ children }: PropsWithChildren) {
     const action = currentUndo;
     setCurrentUndo(null);
     await action.perform(db);
-    setMutationTick((current) => current + 1);
-  }, [currentUndo, db]);
+    notifyMutation();
+  }, [currentUndo, db, notifyMutation]);
 
   const value = useMemo(
     () => ({
       currentUndo,
       mutationTick,
+      notifyMutation,
       pushUndoAction,
       clearUndoAction,
       performUndo,
     }),
-    [clearUndoAction, currentUndo, mutationTick, performUndo, pushUndoAction]
+    [clearUndoAction, currentUndo, mutationTick, notifyMutation, performUndo, pushUndoAction]
   );
 
   return <RecoveryContext.Provider value={value}>{children}</RecoveryContext.Provider>;
