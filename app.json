@@ -12,7 +12,8 @@
       "package": "com.jogakf.todolist"
     },
     "plugins": [
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-notifications"
     ]
   }
 }

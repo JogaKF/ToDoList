@@ -24,7 +24,7 @@ type UseTaskPreviewControllerParams = {
 
 export function useTaskPreviewController({ itemId }: UseTaskPreviewControllerParams) {
   const db = useAppDatabase();
-  const { pushUndoAction, mutationTick } = useRecovery();
+  const { pushUndoAction, mutationTick, notifyMutation } = useRecovery();
   const [item, setItem] = useState<Item | null>(null);
   const [sourceList, setSourceList] = useState<TodoList | null>(null);
   const [relations, setRelations] = useState<ItemRelations>({ parent: null, children: [] });
@@ -126,6 +126,7 @@ export function useTaskPreviewController({ itemId }: UseTaskPreviewControllerPar
       }
 
       await itemsService.updateDueDate(db, item.id, dateKey, scope);
+      notifyMutation();
       await loadItem();
       setSaveMessage(
         scope === 'series'
@@ -133,7 +134,7 @@ export function useTaskPreviewController({ itemId }: UseTaskPreviewControllerPar
           : `Przestawiono to wystapienie na ${dateKey}.`
       );
     },
-    [db, item, loadItem]
+    [db, item, loadItem, notifyMutation]
   );
 
   const handleSave = useCallback(async () => {
@@ -171,11 +172,12 @@ export function useTaskPreviewController({ itemId }: UseTaskPreviewControllerPar
       },
       saveScope
     );
+    notifyMutation();
     await loadItem();
     setIsSaving(false);
     setErrorMessage(null);
     setSaveMessage(saveScope === 'series' ? 'Zmiany zapisaly sie dla calej serii.' : 'Zmiany zapisaly sie lokalnie.');
-  }, [db, draft, isTask, item, loadItem, saveScope]);
+  }, [db, draft, isTask, item, loadItem, notifyMutation, saveScope]);
 
   const handleReset = useCallback(() => {
     setDraft(buildEditorState(item));
@@ -202,10 +204,11 @@ export function useTaskPreviewController({ itemId }: UseTaskPreviewControllerPar
         }
         await itemsService.toggleDone(undoDb, latestItem);
       },
-    });
+      });
+    notifyMutation();
     await loadItem();
     setSaveMessage(item.status === 'done' ? 'Zadanie wrocilo do aktywnych.' : 'Status zadania zostal zaktualizowany.');
-  }, [db, item, loadItem, pushUndoAction]);
+  }, [db, item, loadItem, notifyMutation, pushUndoAction]);
 
   const handleSetMyDayDate = useCallback(
     async (dateKey: string | null) => {
@@ -219,10 +222,11 @@ export function useTaskPreviewController({ itemId }: UseTaskPreviewControllerPar
         await itemsService.removeFromMyDay(db, item.id);
       }
 
+      notifyMutation();
       await loadItem();
       setSaveMessage(dateKey ? 'Zadanie zostalo zaplanowane.' : 'Zadanie usunieto z Mojego dnia.');
     },
-    [db, item, loadItem]
+    [db, item, loadItem, notifyMutation]
   );
 
   const handleAddCustomCategory = useCallback(async () => {

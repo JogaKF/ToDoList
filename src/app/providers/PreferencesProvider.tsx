@@ -23,6 +23,12 @@ type PreferencesContextValue = {
   startTab: StartTab;
   shoppingSortMode: ShoppingSortPreference;
   shoppingGroupMode: ShoppingGroupPreference;
+  dueReminderEnabled: boolean;
+  dueReminderTime: string;
+  myDayReminderEnabled: boolean;
+  myDayReminderTime: string;
+  dailyReviewEnabled: boolean;
+  dailyReviewTime: string;
   setLanguage: (language: Language) => Promise<void>;
   setTheme: (themeId: ThemeId) => Promise<void>;
   setCustomColors: (colors: Partial<{ background: string; panel: string; primary: string }>) => Promise<void>;
@@ -30,6 +36,12 @@ type PreferencesContextValue = {
   setStartTab: (tab: StartTab) => Promise<void>;
   setShoppingSortMode: (mode: ShoppingSortPreference) => Promise<void>;
   setShoppingGroupMode: (mode: ShoppingGroupPreference) => Promise<void>;
+  setDueReminderEnabled: (value: boolean) => Promise<void>;
+  setDueReminderTime: (time: string) => Promise<void>;
+  setMyDayReminderEnabled: (value: boolean) => Promise<void>;
+  setMyDayReminderTime: (time: string) => Promise<void>;
+  setDailyReviewEnabled: (value: boolean) => Promise<void>;
+  setDailyReviewTime: (time: string) => Promise<void>;
   reloadPreferences: () => Promise<void>;
 };
 
@@ -70,6 +82,17 @@ const translations = {
     settings_backup_summary_activity: 'Historia',
     settings_backup_summary_categories: 'Kategorie',
     settings_backup_summary_favorites: 'Ulubione',
+    settings_notifications_section: 'Powiadomienia lokalne',
+    settings_notifications_hint: 'Przypomnienia sa planowane na urzadzeniu z lokalnej bazy, bez syncu i bez internetu.',
+    settings_notifications_due: 'Przypomnienia o terminach',
+    settings_notifications_due_hint: 'Jedno przypomnienie dla aktywnych zadan z ustawionym terminem.',
+    settings_notifications_my_day: 'Przypomnienia Moj dzien',
+    settings_notifications_my_day_hint: 'Jedno przypomnienie dziennie, jesli wybrany dzien ma aktywne zadania.',
+    settings_notifications_daily_review: 'Codzienny przeglad',
+    settings_notifications_daily_review_hint: 'Stale codzienne przypomnienie, zeby sprawdzic plan dnia.',
+    settings_notifications_time: 'Godzina',
+    settings_enabled: 'Wlacz',
+    settings_disabled: 'Wylacz',
     settings_background: 'Tlo',
     settings_panel: 'Panel',
     settings_primary: 'Akcent',
@@ -187,6 +210,17 @@ const translations = {
     settings_backup_summary_activity: 'History',
     settings_backup_summary_categories: 'Categories',
     settings_backup_summary_favorites: 'Favorites',
+    settings_notifications_section: 'Local notifications',
+    settings_notifications_hint: 'Reminders are scheduled on this device from local data, without sync or internet.',
+    settings_notifications_due: 'Due date reminders',
+    settings_notifications_due_hint: 'One reminder for active tasks with a due date.',
+    settings_notifications_my_day: 'My Day reminders',
+    settings_notifications_my_day_hint: 'One reminder per day when that day has active tasks.',
+    settings_notifications_daily_review: 'Daily review',
+    settings_notifications_daily_review_hint: 'A recurring daily reminder to review your plan.',
+    settings_notifications_time: 'Time',
+    settings_enabled: 'Enable',
+    settings_disabled: 'Disable',
     settings_background: 'Background',
     settings_panel: 'Panel',
     settings_primary: 'Accent',
@@ -283,6 +317,19 @@ function normalizeColor(value: string) {
   return '';
 }
 
+function normalizeTime(value: string | null | undefined, fallback: string) {
+  if (!value || !/^\d{2}:\d{2}$/.test(value)) {
+    return fallback;
+  }
+
+  const [hour, minute] = value.split(':').map(Number);
+  if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+    return value;
+  }
+
+  return fallback;
+}
+
 export function PreferencesProvider({ children }: PropsWithChildren) {
   const db = useSQLiteContext();
   const [isReady, setIsReady] = useState(false);
@@ -293,6 +340,12 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
   const [startTab, setStartTabState] = useState<StartTab>('Lists');
   const [shoppingSortMode, setShoppingSortModeState] = useState<ShoppingSortPreference>('manual');
   const [shoppingGroupMode, setShoppingGroupModeState] = useState<ShoppingGroupPreference>('flat');
+  const [dueReminderEnabled, setDueReminderEnabledState] = useState(false);
+  const [dueReminderTime, setDueReminderTimeState] = useState('09:00');
+  const [myDayReminderEnabled, setMyDayReminderEnabledState] = useState(false);
+  const [myDayReminderTime, setMyDayReminderTimeState] = useState('08:00');
+  const [dailyReviewEnabled, setDailyReviewEnabledState] = useState(false);
+  const [dailyReviewTime, setDailyReviewTimeState] = useState('18:00');
   const [customColors, setCustomColorsState] = useState({
     background: '',
     panel: '',
@@ -313,6 +366,12 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
       values.shoppingGroupMode === 'unit' || values.shoppingGroupMode === 'category'
         ? (values.shoppingGroupMode as ShoppingGroupPreference)
         : 'flat';
+    const nextDueReminderEnabled = values.dueReminderEnabled === 'true';
+    const nextDueReminderTime = normalizeTime(values.dueReminderTime, '09:00');
+    const nextMyDayReminderEnabled = values.myDayReminderEnabled === 'true';
+    const nextMyDayReminderTime = normalizeTime(values.myDayReminderTime, '08:00');
+    const nextDailyReviewEnabled = values.dailyReviewEnabled === 'true';
+    const nextDailyReviewTime = normalizeTime(values.dailyReviewTime, '18:00');
     const nextCustom = {
       background: values.customBackground ?? '',
       panel: values.customPanel ?? '',
@@ -329,6 +388,12 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
     setStartTabState(nextStartTab);
     setShoppingSortModeState(nextShoppingSortMode);
     setShoppingGroupModeState(nextShoppingGroupMode);
+    setDueReminderEnabledState(nextDueReminderEnabled);
+    setDueReminderTimeState(nextDueReminderTime);
+    setMyDayReminderEnabledState(nextMyDayReminderEnabled);
+    setMyDayReminderTimeState(nextMyDayReminderTime);
+    setDailyReviewEnabledState(nextDailyReviewEnabled);
+    setDailyReviewTimeState(nextDailyReviewTime);
     setCustomColorsState(nextCustom);
     setThemeState(nextTheme);
     applyTheme(nextTheme);
@@ -431,6 +496,57 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
     [db]
   );
 
+  const setDueReminderEnabled = useCallback(
+    async (value: boolean) => {
+      setDueReminderEnabledState(value);
+      await settingsRepository.set(db, 'dueReminderEnabled', value ? 'true' : 'false');
+    },
+    [db]
+  );
+
+  const setDueReminderTime = useCallback(
+    async (time: string) => {
+      const nextTime = normalizeTime(time, '09:00');
+      setDueReminderTimeState(nextTime);
+      await settingsRepository.set(db, 'dueReminderTime', nextTime);
+    },
+    [db]
+  );
+
+  const setMyDayReminderEnabled = useCallback(
+    async (value: boolean) => {
+      setMyDayReminderEnabledState(value);
+      await settingsRepository.set(db, 'myDayReminderEnabled', value ? 'true' : 'false');
+    },
+    [db]
+  );
+
+  const setMyDayReminderTime = useCallback(
+    async (time: string) => {
+      const nextTime = normalizeTime(time, '08:00');
+      setMyDayReminderTimeState(nextTime);
+      await settingsRepository.set(db, 'myDayReminderTime', nextTime);
+    },
+    [db]
+  );
+
+  const setDailyReviewEnabled = useCallback(
+    async (value: boolean) => {
+      setDailyReviewEnabledState(value);
+      await settingsRepository.set(db, 'dailyReviewEnabled', value ? 'true' : 'false');
+    },
+    [db]
+  );
+
+  const setDailyReviewTime = useCallback(
+    async (time: string) => {
+      const nextTime = normalizeTime(time, '18:00');
+      setDailyReviewTimeState(nextTime);
+      await settingsRepository.set(db, 'dailyReviewTime', nextTime);
+    },
+    [db]
+  );
+
   const value = useMemo(
     () => ({
       language,
@@ -442,6 +558,12 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
       startTab,
       shoppingSortMode,
       shoppingGroupMode,
+      dueReminderEnabled,
+      dueReminderTime,
+      myDayReminderEnabled,
+      myDayReminderTime,
+      dailyReviewEnabled,
+      dailyReviewTime,
       setLanguage,
       setTheme,
       setCustomColors,
@@ -449,20 +571,38 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
       setStartTab,
       setShoppingSortMode,
       setShoppingGroupMode,
+      setDueReminderEnabled,
+      setDueReminderTime,
+      setMyDayReminderEnabled,
+      setMyDayReminderTime,
+      setDailyReviewEnabled,
+      setDailyReviewTime,
       reloadPreferences: loadPreferences,
     }),
     [
       customColors,
+      dailyReviewEnabled,
+      dailyReviewTime,
+      dueReminderEnabled,
+      dueReminderTime,
       isReady,
       language,
       loadPreferences,
       setCustomColors,
+      setDailyReviewEnabled,
+      setDailyReviewTime,
+      setDueReminderEnabled,
+      setDueReminderTime,
       setLanguage,
+      setMyDayReminderEnabled,
+      setMyDayReminderTime,
       setShoppingGroupMode,
       setShoppingSortMode,
       setShowCompleted,
       setStartTab,
       setTheme,
+      myDayReminderEnabled,
+      myDayReminderTime,
       shoppingGroupMode,
       shoppingSortMode,
       showCompleted,

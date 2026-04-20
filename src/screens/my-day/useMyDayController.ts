@@ -16,7 +16,7 @@ import { groupItemsByList } from './helpers';
 
 export function useMyDayController() {
   const db = useAppDatabase();
-  const { pushUndoAction, mutationTick } = useRecovery();
+  const { pushUndoAction, mutationTick, notifyMutation } = useRecovery();
   const { expandedIds, toggleExpanded, expandMany } = useTreeUiStore();
   const { showCompleted } = usePreferences();
   const [items, setItems] = useState<Item[]>([]);
@@ -80,26 +80,29 @@ export function useMyDayController() {
           await myDayService.toggleDone(undoDb, latestItem);
         },
       });
+      notifyMutation();
       await loadData();
     },
-    [db, loadData, pushUndoAction]
+    [db, loadData, notifyMutation, pushUndoAction]
   );
 
   const handleRemoveFromDay = useCallback(
     async (itemId: string) => {
       closeAllSwipeables();
       await myDayService.removeFromDay(db, itemId);
+      notifyMutation();
       await loadData();
     },
-    [closeAllSwipeables, db, loadData]
+    [closeAllSwipeables, db, loadData, notifyMutation]
   );
 
   const handleMoveToDay = useCallback(
     async (itemId: string, dateKey: string) => {
       await myDayService.moveToDay(db, itemId, dateKey);
+      notifyMutation();
       await loadData();
     },
-    [db, loadData]
+    [db, loadData, notifyMutation]
   );
 
   const registerSwipeable = useCallback((itemId: string, instance: Swipeable | null) => {

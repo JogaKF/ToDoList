@@ -38,7 +38,7 @@ type UseListDetailsControllerParams = {
 export function useListDetailsController({ listId, navigateToList }: UseListDetailsControllerParams) {
   const db = useAppDatabase();
   const { expandedIds, toggleExpanded, expandMany, collapseMany } = useTreeUiStore();
-  const { pushUndoAction, mutationTick } = useRecovery();
+  const { pushUndoAction, mutationTick, notifyMutation } = useRecovery();
   const { showCompleted, shoppingSortMode: defaultShoppingSortMode, shoppingGroupMode: defaultShoppingGroupMode } =
     usePreferences();
 
@@ -307,6 +307,7 @@ export function useListDetailsController({ listId, navigateToList }: UseListDeta
     }
 
     resetComposer();
+    notifyMutation();
     await loadData();
   }, [
     composerCategory,
@@ -323,6 +324,7 @@ export function useListDetailsController({ listId, navigateToList }: UseListDeta
     listId,
     loadData,
     newTaskTitle,
+    notifyMutation,
     resetComposer,
   ]);
 
@@ -369,9 +371,10 @@ export function useListDetailsController({ listId, navigateToList }: UseListDeta
           await itemsService.toggleDone(undoDb, latestItem);
         },
       });
+      notifyMutation();
       await loadData();
     },
-    [db, loadData, pushUndoAction]
+    [db, loadData, notifyMutation, pushUndoAction]
   );
 
   const handleDelete = useCallback(
@@ -385,9 +388,10 @@ export function useListDetailsController({ listId, navigateToList }: UseListDeta
           await itemsService.restore(undoDb, item.id);
         },
       });
+      notifyMutation();
       await loadData();
     },
-    [closeAllSwipeables, db, loadData, pushUndoAction]
+    [closeAllSwipeables, db, loadData, notifyMutation, pushUndoAction]
   );
 
   const confirmDelete = useCallback(
@@ -422,17 +426,19 @@ export function useListDetailsController({ listId, navigateToList }: UseListDeta
         await itemsService.addToMyDay(db, item.id);
       }
 
+      notifyMutation();
       await loadData();
     },
-    [closeAllSwipeables, db, loadData]
+    [closeAllSwipeables, db, loadData, notifyMutation]
   );
 
   const handleSetMyDayDate = useCallback(
     async (item: ItemTreeNode, dateKey: string) => {
       await itemsService.addToMyDay(db, item.id, dateKey);
+      notifyMutation();
       await loadData();
     },
-    [db, loadData]
+    [db, loadData, notifyMutation]
   );
 
   const handleMoveItem = useCallback(

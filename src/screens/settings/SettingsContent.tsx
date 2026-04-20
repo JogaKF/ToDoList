@@ -12,6 +12,7 @@ import { StateCard } from '../../components/common/StateCard';
 import { ColorPickerRow } from './ColorPickerRow';
 import {
   backgroundOptions,
+  notificationTimeOptions,
   panelOptions,
   primaryOptions,
   shoppingGroupOptions,
@@ -32,6 +33,12 @@ type SettingsContentProps = {
   startTab: StartTab;
   shoppingSortMode: ShoppingSortPreference;
   shoppingGroupMode: ShoppingGroupPreference;
+  dueReminderEnabled: boolean;
+  dueReminderTime: string;
+  myDayReminderEnabled: boolean;
+  myDayReminderTime: string;
+  dailyReviewEnabled: boolean;
+  dailyReviewTime: string;
   background: string;
   panel: string;
   primary: string;
@@ -41,6 +48,12 @@ type SettingsContentProps = {
   onSetStartTab: (value: StartTab) => void;
   onSetShoppingSortMode: (value: ShoppingSortPreference) => void;
   onSetShoppingGroupMode: (value: ShoppingGroupPreference) => void;
+  onSetDueReminderEnabled: (value: boolean) => void;
+  onSetDueReminderTime: (value: string) => void;
+  onSetMyDayReminderEnabled: (value: boolean) => void;
+  onSetMyDayReminderTime: (value: string) => void;
+  onSetDailyReviewEnabled: (value: boolean) => void;
+  onSetDailyReviewTime: (value: string) => void;
   onSetBackground: (value: string) => void;
   onSetPanel: (value: string) => void;
   onSetPrimary: (value: string) => void;
@@ -60,6 +73,12 @@ export function SettingsContent({
   startTab,
   shoppingSortMode,
   shoppingGroupMode,
+  dueReminderEnabled,
+  dueReminderTime,
+  myDayReminderEnabled,
+  myDayReminderTime,
+  dailyReviewEnabled,
+  dailyReviewTime,
   background,
   panel,
   primary,
@@ -69,6 +88,12 @@ export function SettingsContent({
   onSetStartTab,
   onSetShoppingSortMode,
   onSetShoppingGroupMode,
+  onSetDueReminderEnabled,
+  onSetDueReminderTime,
+  onSetMyDayReminderEnabled,
+  onSetMyDayReminderTime,
+  onSetDailyReviewEnabled,
+  onSetDailyReviewTime,
   onSetBackground,
   onSetPanel,
   onSetPrimary,
@@ -79,6 +104,18 @@ export function SettingsContent({
   onImportBackup,
 }: SettingsContentProps) {
   const backupCard = getBackupStatusCopy(t, backupStatus);
+  const renderTimeOptions = (selectedTime: string, onSelect: (value: string) => void) => (
+    <View style={styles.optionGrid}>
+      {notificationTimeOptions.map((time) => (
+        <PrimaryButton
+          key={time}
+          label={time}
+          tone={selectedTime === time ? 'primary' : 'muted'}
+          onPress={() => onSelect(time)}
+        />
+      ))}
+    </View>
+  );
 
   return (
     <ScreenContainer bottomInset={bottomInset}>
@@ -168,6 +205,56 @@ export function SettingsContent({
         <ColorPickerRow label={t('settings_primary')} options={primaryOptions} selectedColor={primary} onSelect={onSetPrimary} />
         <PrimaryButton label={t('settings_apply_custom')} onPress={onApplyCustomColors} />
         <StateCard title={t('settings_preview_title')} description={t('settings_preview_description')} />
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>{t('settings_notifications_section')}</Text>
+        <Text style={styles.sectionHint}>{t('settings_notifications_hint')}</Text>
+
+        <View style={styles.pickerBlock}>
+          <Text style={styles.inputLabel}>{t('settings_notifications_due')}</Text>
+          <Text style={styles.sectionHint}>{t('settings_notifications_due_hint')}</Text>
+          <View style={styles.optionGrid}>
+            <PrimaryButton label={t('settings_enabled')} tone={dueReminderEnabled ? 'primary' : 'muted'} onPress={() => onSetDueReminderEnabled(true)} />
+            <PrimaryButton label={t('settings_disabled')} tone={!dueReminderEnabled ? 'primary' : 'muted'} onPress={() => onSetDueReminderEnabled(false)} />
+          </View>
+          {dueReminderEnabled ? (
+            <>
+              <Text style={styles.inputLabel}>{t('settings_notifications_time')}</Text>
+              {renderTimeOptions(dueReminderTime, onSetDueReminderTime)}
+            </>
+          ) : null}
+        </View>
+
+        <View style={styles.pickerBlock}>
+          <Text style={styles.inputLabel}>{t('settings_notifications_my_day')}</Text>
+          <Text style={styles.sectionHint}>{t('settings_notifications_my_day_hint')}</Text>
+          <View style={styles.optionGrid}>
+            <PrimaryButton label={t('settings_enabled')} tone={myDayReminderEnabled ? 'primary' : 'muted'} onPress={() => onSetMyDayReminderEnabled(true)} />
+            <PrimaryButton label={t('settings_disabled')} tone={!myDayReminderEnabled ? 'primary' : 'muted'} onPress={() => onSetMyDayReminderEnabled(false)} />
+          </View>
+          {myDayReminderEnabled ? (
+            <>
+              <Text style={styles.inputLabel}>{t('settings_notifications_time')}</Text>
+              {renderTimeOptions(myDayReminderTime, onSetMyDayReminderTime)}
+            </>
+          ) : null}
+        </View>
+
+        <View style={styles.pickerBlock}>
+          <Text style={styles.inputLabel}>{t('settings_notifications_daily_review')}</Text>
+          <Text style={styles.sectionHint}>{t('settings_notifications_daily_review_hint')}</Text>
+          <View style={styles.optionGrid}>
+            <PrimaryButton label={t('settings_enabled')} tone={dailyReviewEnabled ? 'primary' : 'muted'} onPress={() => onSetDailyReviewEnabled(true)} />
+            <PrimaryButton label={t('settings_disabled')} tone={!dailyReviewEnabled ? 'primary' : 'muted'} onPress={() => onSetDailyReviewEnabled(false)} />
+          </View>
+          {dailyReviewEnabled ? (
+            <>
+              <Text style={styles.inputLabel}>{t('settings_notifications_time')}</Text>
+              {renderTimeOptions(dailyReviewTime, onSetDailyReviewTime)}
+            </>
+          ) : null}
+        </View>
       </View>
 
       <View style={styles.section}>

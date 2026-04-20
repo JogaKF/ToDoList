@@ -9,7 +9,7 @@ import { buildSummariesMap } from './helpers';
 
 export function useListsController() {
   const db = useAppDatabase();
-  const { pushUndoAction, mutationTick } = useRecovery();
+  const { pushUndoAction, mutationTick, notifyMutation } = useRecovery();
   const [lists, setLists] = useState<TodoList[]>([]);
   const [summaries, setSummaries] = useState<Record<string, TodoListSummary>>({});
   const [newListName, setNewListName] = useState('');
@@ -81,9 +81,10 @@ export function useListsController() {
           await listsService.restore(undoDb, list.id);
         },
       });
+      notifyMutation();
       await loadLists();
     },
-    [db, loadLists, pushUndoAction]
+    [db, loadLists, notifyMutation, pushUndoAction]
   );
 
   const handleChangeNewListName = useCallback((value: string) => {

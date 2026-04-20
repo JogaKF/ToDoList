@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 
+import { useRecovery } from '../../app/providers/RecoveryProvider';
 import { useAppDatabase } from '../../db/sqlite';
 import { itemsService } from '../../features/items/service';
 import type { PlannedTask } from '../../features/items/types';
@@ -9,6 +10,7 @@ import type { PlannerMode } from './helpers';
 
 export function usePlannerController() {
   const db = useAppDatabase();
+  const { mutationTick, notifyMutation } = useRecovery();
   const [mode, setMode] = useState<PlannerMode>('due');
   const [monthCursor, setMonthCursor] = useState(startOfMonth(todayKey()));
   const [selectedDate, setSelectedDate] = useState(todayKey());
@@ -32,7 +34,7 @@ export function usePlannerController() {
 
   useEffect(() => {
     void loadData();
-  }, [loadData]);
+  }, [loadData, mutationTick]);
 
   useFocusEffect(
     useCallback(() => {
@@ -76,34 +78,38 @@ export function usePlannerController() {
   const handlePlanTask = useCallback(
     async (itemId: string, dateKey: string | null) => {
       await itemsService.updateDueDate(db, itemId, dateKey);
+      notifyMutation();
       await loadData();
     },
-    [db, loadData]
+    [db, loadData, notifyMutation]
   );
 
   const handlePlanMany = useCallback(
     async (dateKey: string | null) => {
       await itemsService.updateDueDateMany(db, selectedTaskIds, dateKey);
       setSelectedTaskIds([]);
+      notifyMutation();
       await loadData();
     },
-    [db, loadData, selectedTaskIds]
+    [db, loadData, notifyMutation, selectedTaskIds]
   );
 
   const handleAddToMyDay = useCallback(
     async (itemId: string, dateKey: string) => {
       await itemsService.addToMyDay(db, itemId, dateKey);
+      notifyMutation();
       await loadData();
     },
-    [db, loadData]
+    [db, loadData, notifyMutation]
   );
 
   const handleRemoveFromMyDay = useCallback(
     async (itemId: string) => {
       await itemsService.removeFromMyDay(db, itemId);
+      notifyMutation();
       await loadData();
     },
-    [db, loadData]
+    [db, loadData, notifyMutation]
   );
 
   const moveMonth = useCallback((offset: number) => {

@@ -13,3 +13,4 @@ export const startTabOptions: StartTab[] = ['Lists', 'Planner', 'MyDay', 'Trash'
 export const shoppingSortOptions: ShoppingSortPreference[] = ['manual', 'alpha'];
 export const shoppingGroupOptions: ShoppingGroupPreference[] = ['flat', 'unit', 'category'];
 export const backupImportTypes = ['application/json', 'text/plain'] as const;
+export const notificationTimeOptions = ['07:00', '08:00', '09:00', '12:00', '18:00', '20:00'] as const;

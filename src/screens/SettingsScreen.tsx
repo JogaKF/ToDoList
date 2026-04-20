@@ -21,6 +21,12 @@ export function SettingsScreen() {
       startTab={controller.startTab}
       shoppingSortMode={controller.shoppingSortMode}
       shoppingGroupMode={controller.shoppingGroupMode}
+      dueReminderEnabled={controller.dueReminderEnabled}
+      dueReminderTime={controller.dueReminderTime}
+      myDayReminderEnabled={controller.myDayReminderEnabled}
+      myDayReminderTime={controller.myDayReminderTime}
+      dailyReviewEnabled={controller.dailyReviewEnabled}
+      dailyReviewTime={controller.dailyReviewTime}
       background={controller.background}
       panel={controller.panel}
       primary={controller.primary}
@@ -30,6 +36,12 @@ export function SettingsScreen() {
       onSetStartTab={(value) => void controller.setStartTab(value)}
       onSetShoppingSortMode={(value) => void controller.setShoppingSortMode(value)}
       onSetShoppingGroupMode={(value) => void controller.setShoppingGroupMode(value)}
+      onSetDueReminderEnabled={(value) => void controller.setDueReminderEnabled(value)}
+      onSetDueReminderTime={(value) => void controller.setDueReminderTime(value)}
+      onSetMyDayReminderEnabled={(value) => void controller.setMyDayReminderEnabled(value)}
+      onSetMyDayReminderTime={(value) => void controller.setMyDayReminderTime(value)}
+      onSetDailyReviewEnabled={(value) => void controller.setDailyReviewEnabled(value)}
+      onSetDailyReviewTime={(value) => void controller.setDailyReviewTime(value)}
       onSetBackground={controller.setBackground}
       onSetPanel={controller.setPanel}
       onSetPrimary={controller.setPrimary}

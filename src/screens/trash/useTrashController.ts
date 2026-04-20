@@ -12,7 +12,7 @@ import { buildDeletedItemBranches } from './helpers';
 
 export function useTrashController() {
   const db = useAppDatabase();
-  const { mutationTick } = useRecovery();
+  const { mutationTick, notifyMutation } = useRecovery();
   const [deletedLists, setDeletedLists] = useState<DeletedTodoList[]>([]);
   const [deletedItems, setDeletedItems] = useState<DeletedItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -63,13 +63,16 @@ export function useTrashController() {
             text: 'Usun na stale',
             style: 'destructive',
             onPress: () => {
-              void listsService.hardDelete(db, list.id).then(loadData);
+              void listsService.hardDelete(db, list.id).then(() => {
+                notifyMutation();
+                return loadData();
+              });
             },
           },
         ]
       );
     },
-    [db, loadData]
+    [db, loadData, notifyMutation]
   );
 
   const confirmDeleteBranchForever = useCallback(
@@ -85,13 +88,16 @@ export function useTrashController() {
             text: 'Usun na stale',
             style: 'destructive',
             onPress: () => {
-              void itemsService.hardDelete(db, branch.root.id).then(loadData);
+              void itemsService.hardDelete(db, branch.root.id).then(() => {
+                notifyMutation();
+                return loadData();
+              });
             },
           },
         ]
       );
     },
-    [db, loadData]
+    [db, loadData, notifyMutation]
   );
 
   const confirmClearTrash = useCallback(() => {
@@ -104,12 +110,15 @@ export function useTrashController() {
           text: 'Oproznij kosz',
           style: 'destructive',
           onPress: () => {
-            void listsService.hardDeleteAllDeleted(db).then(loadData);
+            void listsService.hardDeleteAllDeleted(db).then(() => {
+              notifyMutation();
+              return loadData();
+            });
           },
         },
       ]
     );
-  }, [db, loadData]);
+  }, [db, loadData, notifyMutation]);
 
   return {
     deletedLists,
