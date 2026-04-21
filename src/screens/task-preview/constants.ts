@@ -1,4 +1,5 @@
 import type { RecurrenceType } from '../../features/items/types';
+export { defaultShoppingCategories, shoppingQuickUnits } from '../../features/items/shoppingConstants';
 
 export const recurrenceOptions: RecurrenceType[] = ['none', 'daily', 'weekly', 'monthly', 'weekdays', 'custom'];
 
@@ -10,7 +11,3 @@ export const recurrenceLabels: Record<RecurrenceType, string> = {
   weekdays: 'Dni robocze',
   custom: 'Niestandardowo',
 };
-
-export const shoppingQuickUnits = ['szt', 'kg', 'g', 'l', 'ml', 'opak'] as const;
-
-export const defaultShoppingCategories = ['Warzywa', 'Owoce', 'Nabial', 'Pieczywo', 'Mieso', 'Napoje', 'Chemia'] as const;

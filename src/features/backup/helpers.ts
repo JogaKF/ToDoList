@@ -35,6 +35,7 @@ export function parseBackupJson(raw: string): AppBackup {
     itemActivity,
     shoppingCategories,
     shoppingFavorites,
+    shoppingDictionaryProducts,
   } = parsed.data;
 
   if (
@@ -59,6 +60,7 @@ export function parseBackupJson(raw: string): AppBackup {
       itemActivity,
       shoppingCategories,
       shoppingFavorites,
+      shoppingDictionaryProducts: Array.isArray(shoppingDictionaryProducts) ? shoppingDictionaryProducts : [],
     },
   };
 }
@@ -73,6 +75,7 @@ export function getBackupSummary(backup: AppBackup): AppBackupSummary {
     itemActivity: backup.data.itemActivity.length,
     shoppingCategories: backup.data.shoppingCategories.length,
     shoppingFavorites: backup.data.shoppingFavorites.length,
+    shoppingDictionaryProducts: backup.data.shoppingDictionaryProducts.length,
   };
 }
 

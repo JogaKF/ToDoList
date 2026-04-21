@@ -12,13 +12,21 @@ import { MyDayScreen } from '../../screens/MyDayScreen';
 import { TrashScreen } from '../../screens/TrashScreen';
 import { SettingsScreen } from '../../screens/SettingsScreen';
 import { TaskPreviewScreen } from '../../screens/TaskPreviewScreen';
+import { ProductDictionaryScreen } from '../../screens/ProductDictionaryScreen';
 
-import type { HomeTabParamList, ListsStackParamList, MyDayStackParamList, PlannerStackParamList } from './types';
+import type {
+  HomeTabParamList,
+  ListsStackParamList,
+  MyDayStackParamList,
+  PlannerStackParamList,
+  SettingsStackParamList,
+} from './types';
 
 const HomeTabs = createBottomTabNavigator<HomeTabParamList>();
 const ListsStack = createNativeStackNavigator<ListsStackParamList>();
 const MyDayStack = createNativeStackNavigator<MyDayStackParamList>();
 const PlannerStack = createNativeStackNavigator<PlannerStackParamList>();
+const SettingsStack = createNativeStackNavigator<SettingsStackParamList>();
 
 function ListsStackNavigator() {
   const t = useI18n();
@@ -124,6 +132,39 @@ function PlannerStackNavigator() {
   );
 }
 
+function SettingsStackNavigator() {
+  const t = useI18n();
+  const theme = useTheme();
+
+  return (
+    <SettingsStack.Navigator
+      screenOptions={{
+        headerStyle: {
+          backgroundColor: theme.panel,
+        },
+        headerTintColor: theme.text,
+        headerTitleStyle: {
+          fontWeight: '800',
+        },
+        contentStyle: {
+          backgroundColor: theme.background,
+        },
+      }}
+    >
+      <SettingsStack.Screen
+        name="SettingsHome"
+        component={SettingsScreen}
+        options={{ headerShown: false }}
+      />
+      <SettingsStack.Screen
+        name="ProductDictionary"
+        component={ProductDictionaryScreen}
+        options={{ title: t('settings_shopping_dictionary') }}
+      />
+    </SettingsStack.Navigator>
+  );
+}
+
 function HomeTabsNavigator() {
   const insets = useSafeAreaInsets();
   const t = useI18n();
@@ -174,7 +215,7 @@ function HomeTabsNavigator() {
       <HomeTabs.Screen name="Planner" component={PlannerStackNavigator} options={{ title: t('tab_planner') }} />
       <HomeTabs.Screen name="MyDay" component={MyDayStackNavigator} options={{ title: t('tab_my_day') }} />
       <HomeTabs.Screen name="Trash" component={TrashScreen} options={{ title: t('tab_trash') }} />
-      <HomeTabs.Screen name="Settings" component={SettingsScreen} options={{ title: t('tab_settings') }} />
+      <HomeTabs.Screen name="Settings" component={SettingsStackNavigator} options={{ title: t('tab_settings') }} />
     </HomeTabs.Navigator>
   );
 }

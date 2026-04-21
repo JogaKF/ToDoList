@@ -69,6 +69,17 @@ export async function initDatabase(db: SQLiteDatabase) {
       lastUsedAt TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS shopping_dictionary_products (
+      id TEXT PRIMARY KEY NOT NULL,
+      title TEXT NOT NULL,
+      category TEXT,
+      quantity TEXT,
+      unit TEXT,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      lastUsedAt TEXT NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_lists_deletedAt ON lists(deletedAt);
     CREATE INDEX IF NOT EXISTS idx_lists_position ON lists(position);
     CREATE INDEX IF NOT EXISTS idx_items_listId ON items(listId);
@@ -79,6 +90,9 @@ export async function initDatabase(db: SQLiteDatabase) {
     CREATE INDEX IF NOT EXISTS idx_item_activity_itemId ON item_activity(itemId);
     CREATE INDEX IF NOT EXISTS idx_item_activity_createdAt ON item_activity(createdAt);
     CREATE INDEX IF NOT EXISTS idx_shopping_favorites_lastUsedAt ON shopping_favorites(lastUsedAt);
+    CREATE INDEX IF NOT EXISTS idx_shopping_dictionary_title ON shopping_dictionary_products(title);
+    CREATE INDEX IF NOT EXISTS idx_shopping_dictionary_category ON shopping_dictionary_products(category);
+    CREATE INDEX IF NOT EXISTS idx_shopping_dictionary_lastUsedAt ON shopping_dictionary_products(lastUsedAt);
   `);
 
   await ensureItemsColumns(db);

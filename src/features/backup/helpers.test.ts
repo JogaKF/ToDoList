@@ -101,6 +101,18 @@ const backupData: AppBackupData = {
       lastUsedAt: '2026-04-18T10:00:00.000Z',
     },
   ],
+  shoppingDictionaryProducts: [
+    {
+      id: 'dictionary-1',
+      title: 'Milk',
+      category: 'Nabial',
+      quantity: '2',
+      unit: 'l',
+      createdAt: '2026-04-18T10:00:00.000Z',
+      updatedAt: '2026-04-18T10:00:00.000Z',
+      lastUsedAt: '2026-04-18T10:00:00.000Z',
+    },
+  ],
 };
 
 describe('backup helpers', () => {
@@ -125,7 +137,21 @@ describe('backup helpers', () => {
       itemActivity: 1,
       shoppingCategories: 1,
       shoppingFavorites: 1,
+      shoppingDictionaryProducts: 1,
     });
+  });
+
+  it('keeps older backup files compatible by defaulting dictionary products', () => {
+    const backup = createBackupEnvelope(backupData);
+    const raw = JSON.stringify({
+      ...backup,
+      data: {
+        ...backup.data,
+        shoppingDictionaryProducts: undefined,
+      },
+    });
+
+    expect(parseBackupJson(raw).data.shoppingDictionaryProducts).toEqual([]);
   });
 
   it('rejects malformed backup files', () => {

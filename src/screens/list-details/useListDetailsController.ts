@@ -13,6 +13,7 @@ import type {
   RecurrenceType,
   RecurrenceUnit,
   ShoppingCategory,
+  ShoppingDictionaryProduct,
   ShoppingFavorite,
   ShoppingHistoryEntry,
 } from '../../features/items/types';
@@ -68,6 +69,7 @@ export function useListDetailsController({ listId, navigateToList }: UseListDeta
   const [draftErrors, setDraftErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [shoppingCategories, setShoppingCategories] = useState<ShoppingCategory[]>([]);
+  const [shoppingDictionaryProducts, setShoppingDictionaryProducts] = useState<ShoppingDictionaryProduct[]>([]);
   const [shoppingFavorites, setShoppingFavorites] = useState<ShoppingFavorite[]>([]);
   const [shoppingHistory, setShoppingHistory] = useState<ShoppingHistoryEntry[]>([]);
   const swipeableRefs = useRef<Record<string, Swipeable | null>>({});
@@ -107,12 +109,16 @@ export function useListDetailsController({ listId, navigateToList }: UseListDeta
     };
   }, [visibleItems]);
   const allShoppingCategoryNames = useMemo(() => {
-    const merged = [...defaultShoppingCategories, ...shoppingCategories.map((category) => category.name)];
+    const merged = [
+      ...defaultShoppingCategories,
+      ...shoppingCategories.map((category) => category.name),
+      ...shoppingDictionaryProducts.map((product) => product.category ?? ''),
+    ];
     return Array.from(new Set(merged.map((name) => name.trim()).filter(Boolean)));
-  }, [shoppingCategories]);
+  }, [shoppingCategories, shoppingDictionaryProducts]);
   const shoppingTemplates = useMemo(() => {
     const deduped = new Map<string, ShoppingTemplate>();
-    [...shoppingFavorites, ...shoppingHistory].forEach((template) => {
+    [...shoppingDictionaryProducts, ...shoppingFavorites, ...shoppingHistory].forEach((template) => {
       const key = buildTemplateKey(template);
       if (!deduped.has(key)) {
         deduped.set(key, {
@@ -125,7 +131,7 @@ export function useListDetailsController({ listId, navigateToList }: UseListDeta
     });
 
     return [...deduped.values()];
-  }, [shoppingFavorites, shoppingHistory]);
+  }, [shoppingDictionaryProducts, shoppingFavorites, shoppingHistory]);
   const shoppingSuggestions = useMemo(() => {
     const query = newTaskTitle.trim().toLowerCase();
     if (!isShoppingList || query.length < 2 || /[,;\n]/.test(newTaskTitle)) {
@@ -146,10 +152,11 @@ export function useListDetailsController({ listId, navigateToList }: UseListDeta
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
-    const [nextList, nextTree, nextCategories, nextFavorites, nextHistory] = await Promise.all([
+    const [nextList, nextTree, nextCategories, nextDictionaryProducts, nextFavorites, nextHistory] = await Promise.all([
       listsService.getById(db, listId),
       itemsService.getListTree(db, listId),
       itemsService.getShoppingCategories(db),
+      itemsService.getShoppingDictionaryProducts(db),
       itemsService.getShoppingFavorites(db),
       itemsService.getShoppingHistory(db),
     ]);
@@ -157,6 +164,7 @@ export function useListDetailsController({ listId, navigateToList }: UseListDeta
     setList(nextList ?? null);
     setTree(nextTree);
     setShoppingCategories(nextCategories);
+    setShoppingDictionaryProducts(nextDictionaryProducts);
     setShoppingFavorites(nextFavorites);
     setShoppingHistory(nextHistory);
     setIsLoading(false);

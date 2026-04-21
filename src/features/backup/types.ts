@@ -1,4 +1,10 @@
-import type { Item, ItemActivity, ShoppingCategory, ShoppingFavorite } from '../items/types';
+import type {
+  Item,
+  ItemActivity,
+  ShoppingCategory,
+  ShoppingDictionaryProduct,
+  ShoppingFavorite,
+} from '../items/types';
 import type { TodoList } from '../lists/types';
 
 export type BackupVersion = 1;
@@ -15,6 +21,7 @@ export type AppBackupData = {
   itemActivity: ItemActivity[];
   shoppingCategories: ShoppingCategory[];
   shoppingFavorites: ShoppingFavorite[];
+  shoppingDictionaryProducts: ShoppingDictionaryProduct[];
 };
 
 export type AppBackup = {
@@ -33,4 +40,5 @@ export type AppBackupSummary = {
   itemActivity: number;
   shoppingCategories: number;
   shoppingFavorites: number;
+  shoppingDictionaryProducts: number;
 };

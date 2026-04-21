@@ -18,6 +18,11 @@ export type PlannerStackParamList = {
   TaskPreview: TaskPreviewParams;
 };
 
+export type SettingsStackParamList = {
+  SettingsHome: undefined;
+  ProductDictionary: undefined;
+};
+
 export type HomeTabParamList = {
   Lists: undefined;
   Planner: undefined;

@@ -10,6 +10,7 @@ import type {
   RecurrenceUnit,
   SeriesEditScope,
   ShoppingFavorite,
+  ShoppingDictionaryProduct,
 } from './types';
 import { buildItemTree } from './tree';
 import { getUpcomingRecurringDates } from '../../utils/recurrence';
@@ -74,6 +75,34 @@ export const itemsService = {
     return itemsRepository.addShoppingCategory(db, name);
   },
 
+  getShoppingDictionaryProducts(db: SQLiteDatabase) {
+    return itemsRepository.getShoppingDictionaryProducts(db);
+  },
+
+  searchShoppingDictionaryProducts(db: SQLiteDatabase, query: string, limit = 12) {
+    return itemsRepository.searchShoppingDictionaryProducts(db, query, limit);
+  },
+
+  getShoppingDictionaryByCategory(db: SQLiteDatabase, category: string) {
+    return itemsRepository.getShoppingDictionaryByCategory(db, category);
+  },
+
+  saveShoppingDictionaryProduct(db: SQLiteDatabase, input: Pick<ShoppingDictionaryProduct, 'title' | 'category' | 'quantity' | 'unit'>) {
+    return itemsRepository.upsertShoppingDictionaryProduct(db, input);
+  },
+
+  updateShoppingDictionaryProduct(
+    db: SQLiteDatabase,
+    id: string,
+    input: Pick<ShoppingDictionaryProduct, 'title' | 'category' | 'quantity' | 'unit'>
+  ) {
+    return itemsRepository.updateShoppingDictionaryProduct(db, id, input);
+  },
+
+  removeShoppingDictionaryProduct(db: SQLiteDatabase, id: string) {
+    return itemsRepository.removeShoppingDictionaryProduct(db, id);
+  },
+
   getShoppingFavorites(db: SQLiteDatabase) {
     return itemsRepository.getShoppingFavorites(db);
   },
@@ -112,8 +141,8 @@ export const itemsService = {
     });
   },
 
-  createShoppingItem(db: SQLiteDatabase, listId: string, title: string, details?: TaskDetailsInput) {
-    return itemsRepository.create(db, {
+  async createShoppingItem(db: SQLiteDatabase, listId: string, title: string, details?: TaskDetailsInput) {
+    const item = await itemsRepository.create(db, {
       listId,
       title,
       parentId: null,
@@ -122,6 +151,9 @@ export const itemsService = {
       quantity: details?.quantity ?? null,
       unit: details?.unit ?? null,
     });
+    await itemsRepository.upsertShoppingDictionaryProduct(db, item);
+
+    return item;
   },
 
   async createShoppingItems(db: SQLiteDatabase, listId: string, rawValue: string, details?: TaskDetailsInput) {
@@ -131,7 +163,7 @@ export const itemsService = {
       .filter(Boolean);
 
     for (const title of titles) {
-      await itemsRepository.create(db, {
+      const item = await itemsRepository.create(db, {
         listId,
         title,
         parentId: null,
@@ -140,6 +172,7 @@ export const itemsService = {
         quantity: details?.quantity ?? null,
         unit: details?.unit ?? null,
       });
+      await itemsRepository.upsertShoppingDictionaryProduct(db, item);
     }
   },
 
@@ -147,7 +180,7 @@ export const itemsService = {
     return itemsRepository.updateTitle(db, itemId, title);
   },
 
-  updateDetails(
+  async updateDetails(
     db: SQLiteDatabase,
     itemId: string,
     input: {
@@ -163,7 +196,8 @@ export const itemsService = {
     },
     scope: SeriesEditScope = 'single'
   ) {
-    return itemsRepository.updateDetails(db, itemId, {
+    const currentItem = await itemsRepository.getById(db, itemId);
+    await itemsRepository.updateDetails(db, itemId, {
       title: input.title,
       category: input.category,
       quantity: input.quantity,
@@ -173,6 +207,15 @@ export const itemsService = {
       recurrenceType: input.recurrenceType,
       recurrenceConfig: serializeRecurrenceConfig(input),
     }, scope);
+
+    if (currentItem?.type === 'shopping') {
+      await itemsRepository.upsertShoppingDictionaryProduct(db, {
+        title: input.title,
+        category: input.category,
+        quantity: input.quantity,
+        unit: input.unit,
+      });
+    }
   },
 
   updateDueDate(db: SQLiteDatabase, itemId: string, dueDate: string | null, scope: SeriesEditScope = 'single') {

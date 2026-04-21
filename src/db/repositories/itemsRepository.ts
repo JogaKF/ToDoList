@@ -25,11 +25,17 @@ import {
 } from './itemsRepository.reads';
 import {
   addShoppingCategory,
+  getShoppingDictionaryByCategory,
   getShoppingCategories,
+  getShoppingDictionaryProducts,
   getShoppingFavorites,
   getShoppingHistory,
+  removeShoppingDictionaryProduct,
   removeShoppingFavorite,
+  searchShoppingDictionaryProducts,
   touchShoppingHistory,
+  updateShoppingDictionaryProduct,
+  upsertShoppingDictionaryProduct,
   upsertShoppingFavorite,
 } from './itemsRepository.shopping';
 
@@ -68,6 +74,12 @@ export const itemsRepository = {
   getActivity,
   getShoppingCategories,
   addShoppingCategory,
+  getShoppingDictionaryProducts,
+  searchShoppingDictionaryProducts,
+  getShoppingDictionaryByCategory,
+  upsertShoppingDictionaryProduct,
+  updateShoppingDictionaryProduct,
+  removeShoppingDictionaryProduct,
   getShoppingFavorites,
   upsertShoppingFavorite,
   removeShoppingFavorite,

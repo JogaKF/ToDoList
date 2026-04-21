@@ -48,6 +48,7 @@ type SettingsContentProps = {
   onSetStartTab: (value: StartTab) => void;
   onSetShoppingSortMode: (value: ShoppingSortPreference) => void;
   onSetShoppingGroupMode: (value: ShoppingGroupPreference) => void;
+  onOpenProductDictionary: () => void;
   onSetDueReminderEnabled: (value: boolean) => void;
   onSetDueReminderTime: (value: string) => void;
   onSetMyDayReminderEnabled: (value: boolean) => void;
@@ -88,6 +89,7 @@ export function SettingsContent({
   onSetStartTab,
   onSetShoppingSortMode,
   onSetShoppingGroupMode,
+  onOpenProductDictionary,
   onSetDueReminderEnabled,
   onSetDueReminderTime,
   onSetMyDayReminderEnabled,
@@ -122,6 +124,12 @@ export function SettingsContent({
       <View style={styles.hero}>
         <Text style={styles.title}>{t('settings_title')}</Text>
         <Text style={styles.subtitle}>{t('settings_intro')}</Text>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>{t('settings_shopping_dictionary')}</Text>
+        <Text style={styles.sectionHint}>{t('settings_shopping_dictionary_hint')}</Text>
+        <PrimaryButton label={t('settings_open_dictionary')} onPress={onOpenProductDictionary} />
       </View>
 
       <View style={styles.section}>

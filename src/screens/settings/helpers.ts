@@ -26,6 +26,7 @@ export function formatBackupSummary(t: (key: TranslationKey) => string, summary:
     `${t('settings_backup_summary_activity')}: ${summary.itemActivity}`,
     `${t('settings_backup_summary_categories')}: ${summary.shoppingCategories}`,
     `${t('settings_backup_summary_favorites')}: ${summary.shoppingFavorites}`,
+    `${t('settings_backup_summary_dictionary')}: ${summary.shoppingDictionaryProducts}`,
   ].join(' • ');
 }
 

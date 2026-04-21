@@ -1,18 +1,33 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import type { Item, ItemActivity, ShoppingCategory, ShoppingFavorite } from '../../features/items/types';
+import type {
+  Item,
+  ItemActivity,
+  ShoppingCategory,
+  ShoppingDictionaryProduct,
+  ShoppingFavorite,
+} from '../../features/items/types';
 import type { TodoList } from '../../features/lists/types';
 import type { AppBackupData, BackupSettingsRow } from '../../features/backup/types';
 
 export const backupRepository = {
   async exportAll(db: SQLiteDatabase): Promise<AppBackupData> {
-    const [lists, items, settings, itemActivity, shoppingCategories, shoppingFavorites] = await Promise.all([
+    const [
+      lists,
+      items,
+      settings,
+      itemActivity,
+      shoppingCategories,
+      shoppingFavorites,
+      shoppingDictionaryProducts,
+    ] = await Promise.all([
       db.getAllAsync<TodoList>(`SELECT * FROM lists ORDER BY position ASC, createdAt ASC`),
       db.getAllAsync<Item>(`SELECT * FROM items ORDER BY listId ASC, position ASC, createdAt ASC`),
       db.getAllAsync<BackupSettingsRow>(`SELECT key, value FROM settings ORDER BY key ASC`),
       db.getAllAsync<ItemActivity>(`SELECT * FROM item_activity ORDER BY createdAt ASC`),
       db.getAllAsync<ShoppingCategory>(`SELECT * FROM shopping_categories ORDER BY name COLLATE NOCASE ASC, createdAt ASC`),
       db.getAllAsync<ShoppingFavorite>(`SELECT * FROM shopping_favorites ORDER BY lastUsedAt DESC, title COLLATE NOCASE ASC`),
+      db.getAllAsync<ShoppingDictionaryProduct>(`SELECT * FROM shopping_dictionary_products ORDER BY lastUsedAt DESC, title COLLATE NOCASE ASC`),
     ]);
 
     return {
@@ -22,6 +37,7 @@ export const backupRepository = {
       itemActivity,
       shoppingCategories,
       shoppingFavorites,
+      shoppingDictionaryProducts,
     };
   },
 
@@ -29,6 +45,7 @@ export const backupRepository = {
     await db.withExclusiveTransactionAsync(async (txn) => {
       await txn.execAsync(`
         DELETE FROM item_activity;
+        DELETE FROM shopping_dictionary_products;
         DELETE FROM shopping_favorites;
         DELETE FROM shopping_categories;
         DELETE FROM settings;
@@ -124,6 +141,21 @@ export const backupRepository = {
           favorite.createdAt,
           favorite.updatedAt,
           favorite.lastUsedAt
+        );
+      }
+
+      for (const product of data.shoppingDictionaryProducts) {
+        await txn.runAsync(
+          `INSERT INTO shopping_dictionary_products (id, title, category, quantity, unit, createdAt, updatedAt, lastUsedAt)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          product.id,
+          product.title,
+          product.category,
+          product.quantity,
+          product.unit,
+          product.createdAt,
+          product.updatedAt,
+          product.lastUsedAt
         );
       }
     });

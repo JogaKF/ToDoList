@@ -1,12 +1,16 @@
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { useI18n } from '../app/providers/PreferencesProvider';
+import type { SettingsStackParamList } from '../app/navigation/types';
 import { SettingsContent } from './settings/SettingsContent';
 import { useBackupController } from './settings/useBackupController';
 import { useSettingsController } from './settings/useSettingsController';
 
 export function SettingsScreen() {
   const t = useI18n();
+  const navigation = useNavigation<NativeStackNavigationProp<SettingsStackParamList>>();
   const tabBarHeight = useBottomTabBarHeight();
   const controller = useSettingsController();
   const backupController = useBackupController();
@@ -36,6 +40,7 @@ export function SettingsScreen() {
       onSetStartTab={(value) => void controller.setStartTab(value)}
       onSetShoppingSortMode={(value) => void controller.setShoppingSortMode(value)}
       onSetShoppingGroupMode={(value) => void controller.setShoppingGroupMode(value)}
+      onOpenProductDictionary={() => navigation.navigate('ProductDictionary')}
       onSetDueReminderEnabled={(value) => void controller.setDueReminderEnabled(value)}
       onSetDueReminderTime={(value) => void controller.setDueReminderTime(value)}
       onSetMyDayReminderEnabled={(value) => void controller.setMyDayReminderEnabled(value)}
