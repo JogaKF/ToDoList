@@ -154,14 +154,17 @@ export const itemsRepository = {
   },
 
   async updateTitle(db: SQLiteDatabase, id: string, title: string) {
+    const nextTitle = title.trim();
     await db.runAsync(
       `UPDATE items
        SET title = ?, updatedAt = ?
        WHERE id = ?`,
-      title.trim(),
+      nextTitle,
       nowIso(),
       id
     );
+
+    await this.logActivity(db, id, 'renamed', `Zmieniono nazwe na: ${nextTitle}`);
   },
 
   async updateDetails(
@@ -396,6 +399,13 @@ export const itemsRepository = {
       nowIso(),
       item.id
     );
+
+    await this.logActivity(
+      db,
+      item.id,
+      'parent_changed',
+      nextParentId ? 'Przeniesiono jako subtask' : 'Przeniesiono na glowny poziom listy'
+    );
   },
 
   async moveWithinSiblings(db: SQLiteDatabase, item: Item, direction: 'up' | 'down') {
@@ -443,6 +453,13 @@ export const itemsRepository = {
         target.id
       );
     });
+
+    await this.logActivity(
+      db,
+      item.id,
+      'position_changed',
+      direction === 'up' ? 'Przesunieto wyzej w obrebie rodzenstwa' : 'Przesunieto nizej w obrebie rodzenstwa'
+    );
   },
 
   async toggleStatus(db: SQLiteDatabase, item: Item) {
@@ -663,6 +680,10 @@ export const itemsRepository = {
         );
       }
     });
+
+    for (const id of ids) {
+      await this.logActivity(db, id, 'bulk_deleted', 'Usunieto zbiorczo do kosza');
+    }
   },
 
   async indentUnderPreviousSibling(db: SQLiteDatabase, item: Item) {
@@ -728,6 +749,8 @@ export const itemsRepository = {
   },
 
   async hardDelete(db: SQLiteDatabase, id: string) {
+    await this.logActivity(db, id, 'hard_deleted', 'Usunieto trwale z kosza');
+
     await db.withExclusiveTransactionAsync(async (txn) => {
       const idsToDelete = await this.getDescendantIds(txn, id, true);
       const targets = [id, ...idsToDelete];

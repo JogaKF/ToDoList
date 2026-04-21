@@ -21,6 +21,7 @@ export type PlannerStackParamList = {
 export type SettingsStackParamList = {
   SettingsHome: undefined;
   ProductDictionary: undefined;
+  ActivityLog: undefined;
 };
 
 export type HomeTabParamList = {

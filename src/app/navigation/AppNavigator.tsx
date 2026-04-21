@@ -13,6 +13,7 @@ import { TrashScreen } from '../../screens/TrashScreen';
 import { SettingsScreen } from '../../screens/SettingsScreen';
 import { TaskPreviewScreen } from '../../screens/TaskPreviewScreen';
 import { ProductDictionaryScreen } from '../../screens/ProductDictionaryScreen';
+import { ActivityLogScreen } from '../../screens/ActivityLogScreen';
 
 import type {
   HomeTabParamList,
@@ -160,6 +161,11 @@ function SettingsStackNavigator() {
         name="ProductDictionary"
         component={ProductDictionaryScreen}
         options={{ title: t('settings_shopping_dictionary') }}
+      />
+      <SettingsStack.Screen
+        name="ActivityLog"
+        component={ActivityLogScreen}
+        options={{ title: t('settings_activity_log') }}
       />
     </SettingsStack.Navigator>
   );

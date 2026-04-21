@@ -41,6 +41,7 @@ export function SettingsScreen() {
       onSetShoppingSortMode={(value) => void controller.setShoppingSortMode(value)}
       onSetShoppingGroupMode={(value) => void controller.setShoppingGroupMode(value)}
       onOpenProductDictionary={() => navigation.navigate('ProductDictionary')}
+      onOpenActivityLog={() => navigation.navigate('ActivityLog')}
       onSetDueReminderEnabled={(value) => void controller.setDueReminderEnabled(value)}
       onSetDueReminderTime={(value) => void controller.setDueReminderTime(value)}
       onSetMyDayReminderEnabled={(value) => void controller.setMyDayReminderEnabled(value)}
