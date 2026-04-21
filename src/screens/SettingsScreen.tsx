@@ -35,7 +35,7 @@ export function SettingsScreen() {
       panel={controller.panel}
       primary={controller.primary}
       onSetLanguage={(value) => void controller.setLanguage(value)}
-      onSetTheme={(value) => void controller.setTheme(value as never)}
+      onSetTheme={(value) => void controller.setTheme(value)}
       onSetShowCompleted={(value) => void controller.setShowCompleted(value)}
       onSetStartTab={(value) => void controller.setStartTab(value)}
       onSetShoppingSortMode={(value) => void controller.setShoppingSortMode(value)}

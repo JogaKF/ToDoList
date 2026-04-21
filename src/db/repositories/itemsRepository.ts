@@ -5,7 +5,6 @@ import type {
   RecurrenceType,
   SeriesEditScope,
 } from '../../features/items/types';
-import type { SyncOperation } from '../../features/sync/types';
 import { createId } from '../../utils/id';
 import { nowIso, todayKey } from '../../utils/date';
 import { getNextRecurringDate } from '../../utils/recurrence';
@@ -39,6 +38,7 @@ import {
   upsertShoppingDictionaryProduct,
   upsertShoppingFavorite,
 } from './itemsRepository.shopping';
+import { enqueueItemSnapshot, enqueueItemSnapshots } from './itemsRepository.sync';
 import { syncRepository } from './syncRepository';
 
 type CreateItemInput = {
@@ -59,30 +59,6 @@ type RecurringLineageDirection = 'forward' | 'all';
 
 function isRecurringSeriesItem(item: Item) {
   return item.recurrenceType !== 'none' || Boolean(item.recurrenceOriginId || item.previousRecurringItemId);
-}
-
-async function getItemSnapshot(db: SQLiteDatabase, id: string) {
-  return db.getFirstAsync<Item>(
-    `SELECT * FROM items WHERE id = ?`,
-    id
-  );
-}
-
-async function enqueueItemSnapshot(db: SQLiteDatabase, id: string, operation: SyncOperation, fallback?: unknown) {
-  const snapshot = await getItemSnapshot(db, id);
-  await syncRepository.enqueueChange(db, {
-    entityType: 'item',
-    entityId: id,
-    operation,
-    payload: snapshot ?? fallback ?? { id },
-  });
-}
-
-async function enqueueItemSnapshots(db: SQLiteDatabase, ids: string[], operation: SyncOperation) {
-  const uniqueIds = Array.from(new Set(ids));
-  for (const id of uniqueIds) {
-    await enqueueItemSnapshot(db, id, operation);
-  }
 }
 
 export const itemsRepository = {

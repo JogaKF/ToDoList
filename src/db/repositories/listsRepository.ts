@@ -2,32 +2,15 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import type { Item } from '../../features/items/types';
 import type { DeletedTodoList, TodoList, TodoListSummary } from '../../features/lists/types';
-import type { SyncOperation } from '../../features/sync/types';
 import { createId } from '../../utils/id';
 import { nowIso } from '../../utils/date';
+import { enqueueListSnapshot, getListSnapshot } from './listsRepository.sync';
 import { syncRepository } from './syncRepository';
 
 type CreateListInput = {
   name: string;
   type: TodoList['type'];
 };
-
-async function getListSnapshot(db: SQLiteDatabase, id: string) {
-  return db.getFirstAsync<TodoList>(
-    `SELECT * FROM lists WHERE id = ?`,
-    id
-  );
-}
-
-async function enqueueListSnapshot(db: SQLiteDatabase, id: string, operation: SyncOperation, fallback?: unknown) {
-  const snapshot = await getListSnapshot(db, id);
-  await syncRepository.enqueueChange(db, {
-    entityType: 'list',
-    entityId: id,
-    operation,
-    payload: snapshot ?? fallback ?? { id },
-  });
-}
 
 export const listsRepository = {
   async getAll(db: SQLiteDatabase) {

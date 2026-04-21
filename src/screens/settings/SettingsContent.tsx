@@ -9,6 +9,7 @@ import type {
 import { PrimaryButton } from '../../components/common/PrimaryButton';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
 import { StateCard } from '../../components/common/StateCard';
+import type { ThemeId } from '../../theme/ui';
 import { ColorPickerRow } from './ColorPickerRow';
 import {
   backgroundOptions,
@@ -28,7 +29,7 @@ type SettingsContentProps = {
   t: (key: TranslationKey) => string;
   bottomInset: number;
   language: 'pl' | 'en';
-  themeId: string;
+  themeId: ThemeId;
   showCompleted: boolean;
   startTab: StartTab;
   shoppingSortMode: ShoppingSortPreference;
@@ -43,7 +44,7 @@ type SettingsContentProps = {
   panel: string;
   primary: string;
   onSetLanguage: (value: 'pl' | 'en') => void;
-  onSetTheme: (value: string) => void;
+  onSetTheme: (value: ThemeId) => void;
   onSetShowCompleted: (value: boolean) => void;
   onSetStartTab: (value: StartTab) => void;
   onSetShoppingSortMode: (value: ShoppingSortPreference) => void;
@@ -141,30 +142,6 @@ export function SettingsContent({
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{t('settings_theme_section')}</Text>
-        <Text style={styles.sectionHint}>{t('settings_theme_hint')}</Text>
-        <View style={styles.optionGrid}>
-          {themeOptions.map((option) => (
-            <PrimaryButton
-              key={option}
-              label={t(`settings_theme_${option}` as TranslationKey)}
-              tone={themeId === option ? 'primary' : 'muted'}
-              onPress={() => onSetTheme(option)}
-            />
-          ))}
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{t('settings_language_section')}</Text>
-        <Text style={styles.sectionHint}>{t('settings_language_hint')}</Text>
-        <View style={styles.optionGrid}>
-          <PrimaryButton label={t('settings_language_pl')} tone={language === 'pl' ? 'primary' : 'muted'} onPress={() => onSetLanguage('pl')} />
-          <PrimaryButton label={t('settings_language_en')} tone={language === 'en' ? 'primary' : 'muted'} onPress={() => onSetLanguage('en')} />
-        </View>
-      </View>
-
-      <View style={styles.section}>
         <Text style={styles.sectionTitle}>{t('settings_behavior_section')}</Text>
         <Text style={styles.sectionHint}>{t('settings_behavior_hint')}</Text>
         <Text style={styles.inputLabel}>{t('settings_show_completed')}</Text>
@@ -183,6 +160,37 @@ export function SettingsContent({
               onPress={() => onSetStartTab(option)}
             />
           ))}
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>{t('settings_theme_section')}</Text>
+        <Text style={styles.sectionHint}>{t('settings_theme_hint')}</Text>
+        <View style={styles.optionGrid}>
+          {themeOptions.map((option) => (
+            <PrimaryButton
+              key={option}
+              label={t(`settings_theme_${option}` as TranslationKey)}
+              tone={themeId === option ? 'primary' : 'muted'}
+              onPress={() => onSetTheme(option)}
+            />
+          ))}
+        </View>
+        <Text style={styles.inputLabel}>{t('settings_custom_section')}</Text>
+        <Text style={styles.sectionHint}>{t('settings_custom_hint')}</Text>
+        <ColorPickerRow label={t('settings_background')} options={backgroundOptions} selectedColor={background} onSelect={onSetBackground} />
+        <ColorPickerRow label={t('settings_panel')} options={panelOptions} selectedColor={panel} onSelect={onSetPanel} />
+        <ColorPickerRow label={t('settings_primary')} options={primaryOptions} selectedColor={primary} onSelect={onSetPrimary} />
+        <PrimaryButton label={t('settings_apply_custom')} onPress={onApplyCustomColors} />
+        <StateCard title={t('settings_preview_title')} description={t('settings_preview_description')} />
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>{t('settings_language_section')}</Text>
+        <Text style={styles.sectionHint}>{t('settings_language_hint')}</Text>
+        <View style={styles.optionGrid}>
+          <PrimaryButton label={t('settings_language_pl')} tone={language === 'pl' ? 'primary' : 'muted'} onPress={() => onSetLanguage('pl')} />
+          <PrimaryButton label={t('settings_language_en')} tone={language === 'en' ? 'primary' : 'muted'} onPress={() => onSetLanguage('en')} />
         </View>
       </View>
 
@@ -211,16 +219,6 @@ export function SettingsContent({
             />
           ))}
         </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{t('settings_custom_section')}</Text>
-        <Text style={styles.sectionHint}>{t('settings_custom_hint')}</Text>
-        <ColorPickerRow label={t('settings_background')} options={backgroundOptions} selectedColor={background} onSelect={onSetBackground} />
-        <ColorPickerRow label={t('settings_panel')} options={panelOptions} selectedColor={panel} onSelect={onSetPanel} />
-        <ColorPickerRow label={t('settings_primary')} options={primaryOptions} selectedColor={primary} onSelect={onSetPrimary} />
-        <PrimaryButton label={t('settings_apply_custom')} onPress={onApplyCustomColors} />
-        <StateCard title={t('settings_preview_title')} description={t('settings_preview_description')} />
       </View>
 
       <View style={styles.section}>

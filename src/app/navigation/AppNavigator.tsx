@@ -22,6 +22,7 @@ import type {
   PlannerStackParamList,
   SettingsStackParamList,
 } from './types';
+import { buildStackScreenOptions } from './options';
 
 const HomeTabs = createBottomTabNavigator<HomeTabParamList>();
 const ListsStack = createNativeStackNavigator<ListsStackParamList>();
@@ -35,18 +36,7 @@ function ListsStackNavigator() {
 
   return (
     <ListsStack.Navigator
-      screenOptions={{
-        headerStyle: {
-          backgroundColor: theme.panel,
-        },
-        headerTintColor: theme.text,
-        headerTitleStyle: {
-          fontWeight: '800',
-        },
-        contentStyle: {
-          backgroundColor: theme.background,
-        },
-      }}
+      screenOptions={buildStackScreenOptions(theme)}
     >
       <ListsStack.Screen
         name="ListsHome"
@@ -73,18 +63,7 @@ function MyDayStackNavigator() {
 
   return (
     <MyDayStack.Navigator
-      screenOptions={{
-        headerStyle: {
-          backgroundColor: theme.panel,
-        },
-        headerTintColor: theme.text,
-        headerTitleStyle: {
-          fontWeight: '800',
-        },
-        contentStyle: {
-          backgroundColor: theme.background,
-        },
-      }}
+      screenOptions={buildStackScreenOptions(theme)}
     >
       <MyDayStack.Screen
         name="MyDayHome"
@@ -106,18 +85,7 @@ function PlannerStackNavigator() {
 
   return (
     <PlannerStack.Navigator
-      screenOptions={{
-        headerStyle: {
-          backgroundColor: theme.panel,
-        },
-        headerTintColor: theme.text,
-        headerTitleStyle: {
-          fontWeight: '800',
-        },
-        contentStyle: {
-          backgroundColor: theme.background,
-        },
-      }}
+      screenOptions={buildStackScreenOptions(theme)}
     >
       <PlannerStack.Screen
         name="PlannerHome"
@@ -139,18 +107,7 @@ function SettingsStackNavigator() {
 
   return (
     <SettingsStack.Navigator
-      screenOptions={{
-        headerStyle: {
-          backgroundColor: theme.panel,
-        },
-        headerTintColor: theme.text,
-        headerTitleStyle: {
-          fontWeight: '800',
-        },
-        contentStyle: {
-          backgroundColor: theme.background,
-        },
-      }}
+      screenOptions={buildStackScreenOptions(theme)}
     >
       <SettingsStack.Screen
         name="SettingsHome"
