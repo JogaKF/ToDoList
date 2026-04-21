@@ -80,6 +80,24 @@ export async function initDatabase(db: SQLiteDatabase) {
       lastUsedAt TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS sync_queue (
+      id TEXT PRIMARY KEY NOT NULL,
+      entityType TEXT NOT NULL,
+      entityId TEXT NOT NULL,
+      operation TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      attempts INTEGER NOT NULL DEFAULT 0,
+      lastError TEXT,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS sync_metadata (
+      key TEXT PRIMARY KEY NOT NULL,
+      value TEXT
+    );
+
     CREATE INDEX IF NOT EXISTS idx_lists_deletedAt ON lists(deletedAt);
     CREATE INDEX IF NOT EXISTS idx_lists_position ON lists(position);
     CREATE INDEX IF NOT EXISTS idx_items_listId ON items(listId);
@@ -93,6 +111,9 @@ export async function initDatabase(db: SQLiteDatabase) {
     CREATE INDEX IF NOT EXISTS idx_shopping_dictionary_title ON shopping_dictionary_products(title);
     CREATE INDEX IF NOT EXISTS idx_shopping_dictionary_category ON shopping_dictionary_products(category);
     CREATE INDEX IF NOT EXISTS idx_shopping_dictionary_lastUsedAt ON shopping_dictionary_products(lastUsedAt);
+    CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON sync_queue(status);
+    CREATE INDEX IF NOT EXISTS idx_sync_queue_entity ON sync_queue(entityType, entityId);
+    CREATE INDEX IF NOT EXISTS idx_sync_queue_createdAt ON sync_queue(createdAt);
   `);
 
   await ensureItemsColumns(db);

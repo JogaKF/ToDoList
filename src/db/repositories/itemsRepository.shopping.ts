@@ -9,6 +9,7 @@ import type {
 } from '../../features/items/types';
 import { createId } from '../../utils/id';
 import { nowIso } from '../../utils/date';
+import { syncRepository } from './syncRepository';
 
 type ShoppingProductInput = Pick<ShoppingDictionaryProduct, 'title' | 'category' | 'quantity' | 'unit'>;
 
@@ -19,6 +20,23 @@ function normalizeShoppingProductInput(input: ShoppingProductInput) {
     quantity: input.quantity?.trim() ? input.quantity.trim() : null,
     unit: input.unit?.trim() ? input.unit.trim() : null,
   };
+}
+
+async function enqueueShoppingChange(
+  db: SQLiteDatabase,
+  entityType: 'shopping_category' | 'shopping_favorite' | 'shopping_dictionary_product',
+  entityId: string,
+  operation: 'create' | 'update' | 'delete',
+  payload: unknown,
+  changedAt?: string
+) {
+  await syncRepository.enqueueChange(db, {
+    entityType,
+    entityId,
+    operation,
+    payload,
+    changedAt,
+  });
 }
 
 export function getShoppingCategories(db: SQLiteDatabase) {
@@ -57,6 +75,7 @@ export async function addShoppingCategory(db: SQLiteDatabase, name: string) {
     category.name,
     category.createdAt
   );
+  await enqueueShoppingChange(db, 'shopping_category', category.id, 'create', category, category.createdAt);
 
   return category;
 }
@@ -124,11 +143,14 @@ export async function upsertShoppingDictionaryProduct(db: SQLiteDatabase, input:
       existing.id
     );
 
-    return {
+    const product = {
       ...existing,
       updatedAt: timestamp,
       lastUsedAt: timestamp,
     };
+    await enqueueShoppingChange(db, 'shopping_dictionary_product', product.id, 'update', product, timestamp);
+
+    return product;
   }
 
   const product: ShoppingDictionaryProduct = {
@@ -154,6 +176,7 @@ export async function upsertShoppingDictionaryProduct(db: SQLiteDatabase, input:
     product.updatedAt,
     product.lastUsedAt
   );
+  await enqueueShoppingChange(db, 'shopping_dictionary_product', product.id, 'create', product, product.updatedAt);
 
   return product;
 }
@@ -182,18 +205,30 @@ export async function updateShoppingDictionaryProduct(
     id
   );
 
-  return db.getFirstAsync<ShoppingDictionaryProduct>(
+  const product = await db.getFirstAsync<ShoppingDictionaryProduct>(
     `SELECT * FROM shopping_dictionary_products WHERE id = ?`,
     id
   );
+  if (product) {
+    await enqueueShoppingChange(db, 'shopping_dictionary_product', product.id, 'update', product, product.updatedAt);
+  }
+
+  return product;
 }
 
-export function removeShoppingDictionaryProduct(db: SQLiteDatabase, id: string) {
-  return db.runAsync(
+export async function removeShoppingDictionaryProduct(db: SQLiteDatabase, id: string) {
+  const existing = await db.getFirstAsync<ShoppingDictionaryProduct>(
+    `SELECT * FROM shopping_dictionary_products WHERE id = ?`,
+    id
+  );
+
+  await db.runAsync(
     `DELETE FROM shopping_dictionary_products
      WHERE id = ?`,
     id
   );
+
+  await enqueueShoppingChange(db, 'shopping_dictionary_product', id, 'delete', existing ?? { id });
 }
 
 export function getShoppingFavorites(db: SQLiteDatabase) {
@@ -239,11 +274,14 @@ export async function upsertShoppingFavorite(
       existing.id
     );
 
-    return {
+    const favorite = {
       ...existing,
       updatedAt: timestamp,
       lastUsedAt: timestamp,
     };
+    await enqueueShoppingChange(db, 'shopping_favorite', favorite.id, 'update', favorite, timestamp);
+
+    return favorite;
   }
 
   const favorite: ShoppingFavorite = {
@@ -269,25 +307,46 @@ export async function upsertShoppingFavorite(
     favorite.updatedAt,
     favorite.lastUsedAt
   );
+  await enqueueShoppingChange(db, 'shopping_favorite', favorite.id, 'create', favorite, favorite.updatedAt);
 
   return favorite;
 }
 
-export function removeShoppingFavorite(
+export async function removeShoppingFavorite(
   db: SQLiteDatabase,
   input: Pick<ShoppingFavorite, 'title' | 'category' | 'quantity' | 'unit'>
 ) {
-  return db.runAsync(
+  const title = input.title.trim();
+  const category = input.category?.trim() ? input.category.trim() : null;
+  const quantity = input.quantity?.trim() ? input.quantity.trim() : null;
+  const unit = input.unit?.trim() ? input.unit.trim() : null;
+  const existing = await db.getFirstAsync<ShoppingFavorite>(
+    `SELECT * FROM shopping_favorites
+     WHERE LOWER(title) = LOWER(?)
+       AND COALESCE(LOWER(category), '') = COALESCE(LOWER(?), '')
+       AND COALESCE(quantity, '') = COALESCE(?, '')
+       AND COALESCE(unit, '') = COALESCE(?, '')`,
+    title,
+    category,
+    quantity,
+    unit
+  );
+
+  await db.runAsync(
     `DELETE FROM shopping_favorites
      WHERE LOWER(title) = LOWER(?)
        AND COALESCE(LOWER(category), '') = COALESCE(LOWER(?), '')
        AND COALESCE(quantity, '') = COALESCE(?, '')
        AND COALESCE(unit, '') = COALESCE(?, '')`,
-    input.title.trim(),
-    input.category?.trim() ? input.category.trim() : null,
-    input.quantity?.trim() ? input.quantity.trim() : null,
-    input.unit?.trim() ? input.unit.trim() : null
+    title,
+    category,
+    quantity,
+    unit
   );
+
+  if (existing) {
+    await enqueueShoppingChange(db, 'shopping_favorite', existing.id, 'delete', existing);
+  }
 }
 
 export async function touchShoppingHistory(

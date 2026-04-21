@@ -1,13 +1,33 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
+import type { Item } from '../../features/items/types';
 import type { DeletedTodoList, TodoList, TodoListSummary } from '../../features/lists/types';
+import type { SyncOperation } from '../../features/sync/types';
 import { createId } from '../../utils/id';
 import { nowIso } from '../../utils/date';
+import { syncRepository } from './syncRepository';
 
 type CreateListInput = {
   name: string;
   type: TodoList['type'];
 };
+
+async function getListSnapshot(db: SQLiteDatabase, id: string) {
+  return db.getFirstAsync<TodoList>(
+    `SELECT * FROM lists WHERE id = ?`,
+    id
+  );
+}
+
+async function enqueueListSnapshot(db: SQLiteDatabase, id: string, operation: SyncOperation, fallback?: unknown) {
+  const snapshot = await getListSnapshot(db, id);
+  await syncRepository.enqueueChange(db, {
+    entityType: 'list',
+    entityId: id,
+    operation,
+    payload: snapshot ?? fallback ?? { id },
+  });
+}
 
 export const listsRepository = {
   async getAll(db: SQLiteDatabase) {
@@ -76,18 +96,29 @@ export const listsRepository = {
       list.deletedAt
     );
 
+    await syncRepository.enqueueChange(db, {
+      entityType: 'list',
+      entityId: list.id,
+      operation: 'create',
+      payload: list,
+      changedAt: list.updatedAt,
+    });
+
     return list;
   },
 
   async rename(db: SQLiteDatabase, id: string, name: string) {
+    const timestamp = nowIso();
     await db.runAsync(
       `UPDATE lists
        SET name = ?, updatedAt = ?
        WHERE id = ?`,
       name.trim(),
-      nowIso(),
+      timestamp,
       id
     );
+
+    await enqueueListSnapshot(db, id, 'update');
   },
 
   async softDelete(db: SQLiteDatabase, id: string) {
@@ -112,6 +143,8 @@ export const listsRepository = {
         id
       );
     });
+
+    await enqueueListSnapshot(db, id, 'delete');
   },
 
   async restore(db: SQLiteDatabase, id: string) {
@@ -134,9 +167,32 @@ export const listsRepository = {
         id
       );
     });
+
+    await enqueueListSnapshot(db, id, 'restore');
   },
 
   async hardDelete(db: SQLiteDatabase, id: string) {
+    const snapshot = await getListSnapshot(db, id);
+    const relatedItems = await db.getAllAsync<Item>(
+      `SELECT * FROM items WHERE listId = ?`,
+      id
+    );
+
+    await syncRepository.enqueueChange(db, {
+      entityType: 'list',
+      entityId: id,
+      operation: 'purge',
+      payload: snapshot ?? { id },
+    });
+    for (const item of relatedItems) {
+      await syncRepository.enqueueChange(db, {
+        entityType: 'item',
+        entityId: item.id,
+        operation: 'purge',
+        payload: item,
+      });
+    }
+
     await db.withExclusiveTransactionAsync(async (txn) => {
       await txn.runAsync(
         `DELETE FROM items
@@ -153,6 +209,28 @@ export const listsRepository = {
   },
 
   async hardDeleteAllDeleted(db: SQLiteDatabase) {
+    const deletedLists = await this.getDeleted(db);
+    const deletedItems = await db.getAllAsync<Item>(
+      `SELECT * FROM items WHERE deletedAt IS NOT NULL`
+    );
+
+    for (const list of deletedLists) {
+      await syncRepository.enqueueChange(db, {
+        entityType: 'list',
+        entityId: list.id,
+        operation: 'purge',
+        payload: list,
+      });
+    }
+    for (const item of deletedItems) {
+      await syncRepository.enqueueChange(db, {
+        entityType: 'item',
+        entityId: item.id,
+        operation: 'purge',
+        payload: item,
+      });
+    }
+
     await db.withExclusiveTransactionAsync(async (txn) => {
       await txn.runAsync(
         `DELETE FROM items
@@ -236,6 +314,20 @@ export const listsRepository = {
         );
       }
     });
+
+    await enqueueListSnapshot(db, duplicateId, 'create');
+    const duplicateItems = await db.getAllAsync<{ id: string }>(
+      `SELECT id FROM items WHERE listId = ?`,
+      duplicateId
+    );
+    for (const item of duplicateItems) {
+      await syncRepository.enqueueChange(db, {
+        entityType: 'item',
+        entityId: item.id,
+        operation: 'create',
+        payload: await db.getFirstAsync(`SELECT * FROM items WHERE id = ?`, item.id),
+      });
+    }
 
     return duplicateId;
   },

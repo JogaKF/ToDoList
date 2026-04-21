@@ -44,6 +44,7 @@ export const backupRepository = {
   async replaceAll(db: SQLiteDatabase, data: AppBackupData) {
     await db.withExclusiveTransactionAsync(async (txn) => {
       await txn.execAsync(`
+        DELETE FROM sync_queue;
         DELETE FROM item_activity;
         DELETE FROM shopping_dictionary_products;
         DELETE FROM shopping_favorites;

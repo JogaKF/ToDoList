@@ -5,6 +5,7 @@ import type {
   RecurrenceType,
   SeriesEditScope,
 } from '../../features/items/types';
+import type { SyncOperation } from '../../features/sync/types';
 import { createId } from '../../utils/id';
 import { nowIso, todayKey } from '../../utils/date';
 import { getNextRecurringDate } from '../../utils/recurrence';
@@ -38,6 +39,7 @@ import {
   upsertShoppingDictionaryProduct,
   upsertShoppingFavorite,
 } from './itemsRepository.shopping';
+import { syncRepository } from './syncRepository';
 
 type CreateItemInput = {
   listId: string;
@@ -57,6 +59,30 @@ type RecurringLineageDirection = 'forward' | 'all';
 
 function isRecurringSeriesItem(item: Item) {
   return item.recurrenceType !== 'none' || Boolean(item.recurrenceOriginId || item.previousRecurringItemId);
+}
+
+async function getItemSnapshot(db: SQLiteDatabase, id: string) {
+  return db.getFirstAsync<Item>(
+    `SELECT * FROM items WHERE id = ?`,
+    id
+  );
+}
+
+async function enqueueItemSnapshot(db: SQLiteDatabase, id: string, operation: SyncOperation, fallback?: unknown) {
+  const snapshot = await getItemSnapshot(db, id);
+  await syncRepository.enqueueChange(db, {
+    entityType: 'item',
+    entityId: id,
+    operation,
+    payload: snapshot ?? fallback ?? { id },
+  });
+}
+
+async function enqueueItemSnapshots(db: SQLiteDatabase, ids: string[], operation: SyncOperation) {
+  const uniqueIds = Array.from(new Set(ids));
+  for (const id of uniqueIds) {
+    await enqueueItemSnapshot(db, id, operation);
+  }
 }
 
 export const itemsRepository = {
@@ -149,6 +175,13 @@ export const itemsRepository = {
     );
 
     await this.logActivity(db, item.id, 'created', `Utworzono ${item.type === 'shopping' ? 'pozycje zakupow' : 'zadanie'}: ${item.title}`);
+    await syncRepository.enqueueChange(db, {
+      entityType: 'item',
+      entityId: item.id,
+      operation: 'create',
+      payload: item,
+      changedAt: item.updatedAt,
+    });
 
     return item;
   },
@@ -165,6 +198,7 @@ export const itemsRepository = {
     );
 
     await this.logActivity(db, id, 'renamed', `Zmieniono nazwe na: ${nextTitle}`);
+    await enqueueItemSnapshot(db, id, 'update');
   },
 
   async updateDetails(
@@ -234,6 +268,7 @@ export const itemsRepository = {
           ? `Zmieniono serie razem z wyjatkami: ${title}`
           : `Zmieniono serie od tego wystapienia: ${title}`
       );
+      await enqueueItemSnapshots(db, targetItems.map((targetItem) => targetItem.id), 'update');
 
       return;
     }
@@ -268,6 +303,7 @@ export const itemsRepository = {
       'item_updated',
       `Zmieniono szczegoly zadania: ${title}`
     );
+    await enqueueItemSnapshot(db, id, 'update');
   },
 
   async updateDueDate(db: SQLiteDatabase, id: string, dueDate: string | null, scope: SeriesEditScope = 'single') {
@@ -308,6 +344,7 @@ export const itemsRepository = {
           ? `Przestawiono serie z wyjatkami na ${dueDate ?? 'brak daty'}`
           : `Przestawiono serie od tego wystapienia na ${dueDate ?? 'brak daty'}`
       );
+      await enqueueItemSnapshots(db, targetItems.map((targetItem) => targetItem.id), 'update');
       return;
     }
 
@@ -324,6 +361,7 @@ export const itemsRepository = {
     );
 
     await this.logActivity(db, id, 'rescheduled', `Zmieniono termin na ${dueDate ?? 'brak daty'}`);
+    await enqueueItemSnapshot(db, id, 'update');
   },
 
   async catchUpRecurringOverdue(db: SQLiteDatabase, id: string, referenceDate = todayKey()) {
@@ -382,6 +420,7 @@ export const itemsRepository = {
     for (const id of ids) {
       await this.logActivity(db, id, 'bulk_rescheduled', `Zaplanowano hurtowo na ${dueDate ?? 'brak daty'}`);
     }
+    await enqueueItemSnapshots(db, items.map((item) => item.id), 'update');
   },
 
   getPlannedTasks,
@@ -406,6 +445,7 @@ export const itemsRepository = {
       'parent_changed',
       nextParentId ? 'Przeniesiono jako subtask' : 'Przeniesiono na glowny poziom listy'
     );
+    await enqueueItemSnapshot(db, item.id, 'update');
   },
 
   async moveWithinSiblings(db: SQLiteDatabase, item: Item, direction: 'up' | 'down') {
@@ -460,25 +500,34 @@ export const itemsRepository = {
       'position_changed',
       direction === 'up' ? 'Przesunieto wyzej w obrebie rodzenstwa' : 'Przesunieto nizej w obrebie rodzenstwa'
     );
+    await enqueueItemSnapshots(db, [item.id, target.id], 'update');
   },
 
   async toggleStatus(db: SQLiteDatabase, item: Item) {
     const nextStatus = item.status === 'todo' ? 'done' : 'todo';
     const timestamp = nowIso();
+    let updatedIds: string[] = [];
+    let createdIds: string[] = [];
+    let deletedIds: string[] = [];
 
     await db.withExclusiveTransactionAsync(async (txn) => {
       if (item.recurrenceType !== 'none') {
         if (nextStatus === 'done') {
-          await this.completeRecurringItem(txn, item, timestamp);
+          const result = await this.completeRecurringItem(txn, item, timestamp);
+          updatedIds = result.updatedIds;
+          createdIds = result.createdIds;
           return;
         }
 
-        await this.undoRecurringCompletion(txn, item, timestamp);
+        const result = await this.undoRecurringCompletion(txn, item, timestamp);
+        updatedIds = result.updatedIds;
+        deletedIds = result.deletedIds;
         return;
       }
 
       const descendantIds = await this.getDescendantIds(txn, item.id);
       const targetIds = [item.id, ...descendantIds];
+      updatedIds = targetIds;
 
       for (const targetId of targetIds) {
         await txn.runAsync(
@@ -493,6 +542,7 @@ export const itemsRepository = {
 
       if (nextStatus === 'todo') {
         const ancestorIds = await this.getAncestorIds(txn, item.parentId);
+        updatedIds = [...targetIds, ...ancestorIds];
 
         for (const ancestorId of ancestorIds) {
           await txn.runAsync(
@@ -513,11 +563,15 @@ export const itemsRepository = {
       'status_changed',
       nextStatus === 'done' ? `Oznaczono jako zrobione: ${item.title}` : `Przywrocono do aktywnych: ${item.title}`
     );
+    await enqueueItemSnapshots(db, updatedIds, 'update');
+    await enqueueItemSnapshots(db, createdIds, 'create');
+    await enqueueItemSnapshots(db, deletedIds, 'delete');
   },
 
   async completeRecurringItem(db: SQLiteDatabase, item: Item, timestamp: string) {
     const subtree = await this.getSubtreeItems(db, item.id);
     const nextDueDate = getNextRecurringDate(item.dueDate, item.recurrenceType, item.recurrenceConfig);
+    const createdIds: string[] = [];
 
     for (const subtreeItem of subtree) {
       await db.runAsync(
@@ -537,6 +591,7 @@ export const itemsRepository = {
     for (const subtreeItem of subtree) {
       const newId = createId('item');
       idMap.set(subtreeItem.id, newId);
+      createdIds.push(newId);
 
       const isRoot = subtreeItem.id === item.id;
       const clonedParentId = isRoot ? subtreeItem.parentId : idMap.get(subtreeItem.parentId ?? '') ?? null;
@@ -568,6 +623,11 @@ export const itemsRepository = {
         null
       );
     }
+
+    return {
+      updatedIds: subtree.map((subtreeItem) => subtreeItem.id),
+      createdIds,
+    };
   },
 
   async undoRecurringCompletion(db: SQLiteDatabase, item: Item, timestamp: string) {
@@ -581,6 +641,7 @@ export const itemsRepository = {
     const generatedItems = allActiveItems.filter((candidate) =>
       candidate.previousRecurringItemId ? subtreeIds.has(candidate.previousRecurringItemId) : false
     );
+    const deletedIds = generatedItems.map((generatedItem) => generatedItem.id);
 
     for (const generatedItem of generatedItems) {
       await db.runAsync(
@@ -615,14 +676,20 @@ export const itemsRepository = {
         ancestorId
       );
     }
+
+    return {
+      updatedIds: [...subtree.map((subtreeItem) => subtreeItem.id), ...ancestorIds],
+      deletedIds,
+    };
   },
 
   async setMyDay(db: SQLiteDatabase, id: string, dateKey: string | null) {
     const timestamp = nowIso();
+    let targetIds: string[] = [];
 
     await db.withExclusiveTransactionAsync(async (txn) => {
       const descendantIds = await this.getDescendantIds(txn, id);
-      const targetIds = [id, ...descendantIds];
+      targetIds = [id, ...descendantIds];
 
       for (const targetId of targetIds) {
         await txn.runAsync(
@@ -637,14 +704,16 @@ export const itemsRepository = {
     });
 
     await this.logActivity(db, id, 'my_day_changed', dateKey ? `Dodano do Mojego dnia: ${dateKey}` : 'Usunieto z Mojego dnia');
+    await enqueueItemSnapshots(db, targetIds, 'update');
   },
 
   async softDelete(db: SQLiteDatabase, id: string) {
     const deletedAt = nowIso();
+    let targets: string[] = [];
 
     await db.withExclusiveTransactionAsync(async (txn) => {
       const idsToDelete = await this.getDescendantIds(txn, id);
-      const targets = [id, ...idsToDelete];
+      targets = [id, ...idsToDelete];
 
       for (const targetId of targets) {
         await txn.runAsync(
@@ -659,6 +728,7 @@ export const itemsRepository = {
     });
 
     await this.logActivity(db, id, 'deleted', 'Usunieto do kosza');
+    await enqueueItemSnapshots(db, targets, 'delete');
   },
 
   async softDeleteMany(db: SQLiteDatabase, ids: string[]) {
@@ -684,6 +754,7 @@ export const itemsRepository = {
     for (const id of ids) {
       await this.logActivity(db, id, 'bulk_deleted', 'Usunieto zbiorczo do kosza');
     }
+    await enqueueItemSnapshots(db, ids, 'delete');
   },
 
   async indentUnderPreviousSibling(db: SQLiteDatabase, item: Item) {
@@ -729,10 +800,11 @@ export const itemsRepository = {
 
   async restore(db: SQLiteDatabase, id: string) {
     const restoredAt = nowIso();
+    let targets: string[] = [];
 
     await db.withExclusiveTransactionAsync(async (txn) => {
       const idsToRestore = await this.getDescendantIds(txn, id, true);
-      const targets = [id, ...idsToRestore];
+      targets = [id, ...idsToRestore];
 
       for (const targetId of targets) {
         await txn.runAsync(
@@ -746,15 +818,18 @@ export const itemsRepository = {
     });
 
     await this.logActivity(db, id, 'restored', 'Przywrocono z kosza');
+    await enqueueItemSnapshots(db, targets, 'restore');
   },
 
   async hardDelete(db: SQLiteDatabase, id: string) {
     await this.logActivity(db, id, 'hard_deleted', 'Usunieto trwale z kosza');
+    const idsToDelete = await this.getDescendantIds(db, id, true);
+    const targets = [id, ...idsToDelete];
+    for (const targetId of targets) {
+      await enqueueItemSnapshot(db, targetId, 'purge');
+    }
 
     await db.withExclusiveTransactionAsync(async (txn) => {
-      const idsToDelete = await this.getDescendantIds(txn, id, true);
-      const targets = [id, ...idsToDelete];
-
       for (const targetId of targets) {
         await txn.runAsync(
           `DELETE FROM items
@@ -766,6 +841,11 @@ export const itemsRepository = {
   },
 
   async hardDeleteAllDeleted(db: SQLiteDatabase) {
+    const deletedItems = await this.getDeleted(db);
+    for (const item of deletedItems) {
+      await enqueueItemSnapshot(db, item.id, 'purge', item);
+    }
+
     await db.runAsync(
       `DELETE FROM items
        WHERE deletedAt IS NOT NULL`
