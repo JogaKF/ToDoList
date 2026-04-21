@@ -1,9 +1,16 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import { serializeSyncPayload } from '../../features/sync/helpers';
+import {
+  buildSyncQueuePayload,
+  coalesceSyncOperation,
+  getPushedRetentionCutoff,
+  serializeSyncPayload,
+} from '../../features/sync/helpers';
 import type { SyncQueueChange, SyncQueueInput, SyncState } from '../../features/sync/types';
 import { createId } from '../../utils/id';
 import { nowIso } from '../../utils/date';
+
+const pushedRetentionDays = 30;
 
 const metadataKeys = {
   clientId: 'clientId',
@@ -15,6 +22,43 @@ const metadataKeys = {
 export const syncRepository = {
   async enqueueChange(db: SQLiteDatabase, input: SyncQueueInput) {
     const timestamp = input.changedAt ?? nowIso();
+    const existingChange =
+      input.coalesce === false
+        ? null
+        : await db.getFirstAsync<Pick<SyncQueueChange, 'id' | 'operation'>>(
+            `SELECT id, operation
+             FROM sync_queue
+             WHERE entityType = ?
+               AND entityId = ?
+               AND status IN ('pending', 'failed')
+             ORDER BY createdAt ASC
+             LIMIT 1`,
+            input.entityType,
+            input.entityId
+          );
+    const operation = existingChange
+      ? coalesceSyncOperation(existingChange.operation, input.operation)
+      : input.operation;
+    const payload = buildSyncQueuePayload(
+      {
+        ...input,
+        operation,
+      },
+      timestamp
+    );
+
+    if (existingChange) {
+      await db.runAsync(
+        `UPDATE sync_queue
+         SET operation = ?, payload = ?, status = 'pending', attempts = 0, lastError = NULL, updatedAt = ?
+         WHERE id = ?`,
+        operation,
+        serializeSyncPayload(payload),
+        timestamp,
+        existingChange.id
+      );
+      return;
+    }
 
     await db.runAsync(
       `INSERT INTO sync_queue (
@@ -23,8 +67,8 @@ export const syncRepository = {
       createId('sync'),
       input.entityType,
       input.entityId,
-      input.operation,
-      serializeSyncPayload(input.payload),
+      operation,
+      serializeSyncPayload(payload),
       timestamp,
       timestamp
     );
@@ -59,6 +103,7 @@ export const syncRepository = {
     });
 
     await this.setMetadata(db, metadataKeys.lastPushedAt, timestamp);
+    await this.prunePushedChanges(db);
   },
 
   async markFailed(db: SQLiteDatabase, id: string, error: string) {
@@ -115,6 +160,35 @@ export const syncRepository = {
     }, {});
   },
 
+  async getRecentChanges(db: SQLiteDatabase, limit = 20) {
+    return db.getAllAsync<SyncQueueChange>(
+      `SELECT * FROM sync_queue
+       ORDER BY createdAt DESC
+       LIMIT ?`,
+      limit
+    );
+  },
+
+  async prunePushedChanges(
+    db: SQLiteDatabase,
+    olderThanIso = getPushedRetentionCutoff(pushedRetentionDays),
+    limit = 500
+  ) {
+    await db.runAsync(
+      `DELETE FROM sync_queue
+       WHERE id IN (
+         SELECT id
+         FROM sync_queue
+         WHERE status = 'pushed'
+           AND updatedAt < ?
+         ORDER BY updatedAt ASC
+         LIMIT ?
+       )`,
+      olderThanIso,
+      limit
+    );
+  },
+
   async getState(db: SQLiteDatabase): Promise<SyncState> {
     const clientId = await this.ensureClientId(db);
     const [metadata, stats] = await Promise.all([this.getMetadata(db), this.getQueueStats(db)]);
@@ -126,6 +200,7 @@ export const syncRepository = {
       syncEnabled: metadata.syncEnabled === 'true',
       pendingChanges: stats.pending ?? 0,
       failedChanges: stats.failed ?? 0,
+      pushedChanges: stats.pushed ?? 0,
     };
   },
 };

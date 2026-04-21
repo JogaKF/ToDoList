@@ -10,6 +10,23 @@ export type SyncOperation = 'create' | 'update' | 'delete' | 'restore' | 'purge'
 
 export type SyncQueueStatus = 'pending' | 'pushed' | 'failed';
 
+export type SyncQueueBatchMetadata = {
+  id: string;
+  index: number;
+  size: number;
+  reason: string;
+};
+
+export type SyncQueuePayload<TSnapshot = unknown> = {
+  version: 1;
+  entityType: SyncEntityType;
+  entityId: string;
+  operation: SyncOperation;
+  changedAt: string;
+  snapshot: TSnapshot;
+  batch?: SyncQueueBatchMetadata;
+};
+
 export type SyncQueueChange = {
   id: string;
   entityType: SyncEntityType;
@@ -29,6 +46,8 @@ export type SyncQueueInput = {
   operation: SyncOperation;
   payload?: unknown;
   changedAt?: string;
+  batch?: SyncQueueBatchMetadata;
+  coalesce?: boolean;
 };
 
 export type SyncState = {
@@ -38,6 +57,7 @@ export type SyncState = {
   syncEnabled: boolean;
   pendingChanges: number;
   failedChanges: number;
+  pushedChanges: number;
 };
 
 export type RemoteChangeEnvelope<TPayload = unknown> = {

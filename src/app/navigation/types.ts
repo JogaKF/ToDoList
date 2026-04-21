@@ -22,6 +22,7 @@ export type SettingsStackParamList = {
   SettingsHome: undefined;
   ProductDictionary: undefined;
   ActivityLog: undefined;
+  SyncDiagnostics: undefined;
 };
 
 export type HomeTabParamList = {

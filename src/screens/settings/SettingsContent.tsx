@@ -51,6 +51,7 @@ type SettingsContentProps = {
   onSetShoppingGroupMode: (value: ShoppingGroupPreference) => void;
   onOpenProductDictionary: () => void;
   onOpenActivityLog: () => void;
+  onOpenSyncDiagnostics: () => void;
   onSetDueReminderEnabled: (value: boolean) => void;
   onSetDueReminderTime: (value: string) => void;
   onSetMyDayReminderEnabled: (value: boolean) => void;
@@ -93,6 +94,7 @@ export function SettingsContent({
   onSetShoppingGroupMode,
   onOpenProductDictionary,
   onOpenActivityLog,
+  onOpenSyncDiagnostics,
   onSetDueReminderEnabled,
   onSetDueReminderTime,
   onSetMyDayReminderEnabled,
@@ -139,6 +141,12 @@ export function SettingsContent({
         <Text style={styles.sectionTitle}>{t('settings_activity_log')}</Text>
         <Text style={styles.sectionHint}>{t('settings_activity_log_hint')}</Text>
         <PrimaryButton label={t('settings_open_activity_log')} tone="muted" onPress={onOpenActivityLog} />
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>{t('settings_sync_diagnostics')}</Text>
+        <Text style={styles.sectionHint}>{t('settings_sync_diagnostics_hint')}</Text>
+        <PrimaryButton label={t('settings_open_sync_diagnostics')} tone="muted" onPress={onOpenSyncDiagnostics} />
       </View>
 
       <View style={styles.section}>

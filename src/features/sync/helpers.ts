@@ -1,4 +1,5 @@
 import { nowIso } from '../../utils/date';
+import type { SyncOperation, SyncQueueInput, SyncQueuePayload } from './types';
 
 type TimestampedEntity = {
   updatedAt?: string | null;
@@ -38,4 +39,49 @@ export function buildSyncMetadataDefaults(clientId: string) {
     syncEnabled: false,
     createdAt: nowIso(),
   };
+}
+
+export function buildSyncQueuePayload(
+  input: SyncQueueInput,
+  changedAt: string
+): SyncQueuePayload {
+  return {
+    version: 1,
+    entityType: input.entityType,
+    entityId: input.entityId,
+    operation: input.operation,
+    changedAt,
+    snapshot: input.payload ?? { id: input.entityId },
+    batch: input.batch,
+  };
+}
+
+export function coalesceSyncOperation(current: SyncOperation, next: SyncOperation): SyncOperation {
+  if (current === 'purge' || next === 'purge') {
+    return 'purge';
+  }
+
+  if (next === 'delete') {
+    return 'delete';
+  }
+
+  if (next === 'restore') {
+    return current === 'create' ? 'create' : 'restore';
+  }
+
+  if (next === 'update') {
+    if (current === 'create' || current === 'restore' || current === 'delete') {
+      return current;
+    }
+
+    return 'update';
+  }
+
+  return current === 'delete' ? 'delete' : 'create';
+}
+
+export function getPushedRetentionCutoff(days: number, referenceDate = new Date()) {
+  const cutoff = new Date(referenceDate);
+  cutoff.setUTCDate(cutoff.getUTCDate() - days);
+  return cutoff.toISOString();
 }

@@ -14,6 +14,7 @@ import { SettingsScreen } from '../../screens/SettingsScreen';
 import { TaskPreviewScreen } from '../../screens/TaskPreviewScreen';
 import { ProductDictionaryScreen } from '../../screens/ProductDictionaryScreen';
 import { ActivityLogScreen } from '../../screens/ActivityLogScreen';
+import { SyncDiagnosticsScreen } from '../../screens/SyncDiagnosticsScreen';
 
 import type {
   HomeTabParamList,
@@ -123,6 +124,11 @@ function SettingsStackNavigator() {
         name="ActivityLog"
         component={ActivityLogScreen}
         options={{ title: t('settings_activity_log') }}
+      />
+      <SettingsStack.Screen
+        name="SyncDiagnostics"
+        component={SyncDiagnosticsScreen}
+        options={{ title: t('settings_sync_diagnostics') }}
       />
     </SettingsStack.Navigator>
   );
