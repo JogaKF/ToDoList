@@ -13,7 +13,7 @@ import type {
   ShoppingDictionaryProduct,
 } from './types';
 import { buildItemTree } from './tree';
-import { getUpcomingRecurringDates } from '../../utils/recurrence';
+import { getNextRecurringDate, getUpcomingRecurringDates } from '../../utils/recurrence';
 
 type TaskDetailsInput = {
   category?: string | null;
@@ -222,6 +222,10 @@ export const itemsService = {
     return itemsRepository.updateDueDate(db, itemId, dueDate, scope);
   },
 
+  catchUpRecurringOverdue(db: SQLiteDatabase, itemId: string, referenceDate = todayKey()) {
+    return itemsRepository.catchUpRecurringOverdue(db, itemId, referenceDate);
+  },
+
   updateDueDateMany(db: SQLiteDatabase, itemIds: string[], dueDate: string | null) {
     return itemsRepository.updateDueDateMany(db, itemIds, dueDate);
   },
@@ -234,8 +238,12 @@ export const itemsService = {
     return itemsRepository.getTasksWithoutDate(db);
   },
 
-  getRecurringPreview(item: Pick<Item, 'dueDate' | 'recurrenceType' | 'recurrenceConfig'>, count = 4) {
-    return getUpcomingRecurringDates(item.dueDate, item.recurrenceType, item.recurrenceConfig, count);
+  getNextRecurringDate(item: Pick<Item, 'dueDate' | 'recurrenceType' | 'recurrenceConfig'>, referenceDate = todayKey()) {
+    return getNextRecurringDate(item.dueDate, item.recurrenceType, item.recurrenceConfig, referenceDate);
+  },
+
+  getRecurringPreview(item: Pick<Item, 'dueDate' | 'recurrenceType' | 'recurrenceConfig'>, count = 4, referenceDate = todayKey()) {
+    return getUpcomingRecurringDates(item.dueDate, item.recurrenceType, item.recurrenceConfig, count, referenceDate);
   },
 
   moveWithinSiblings(db: SQLiteDatabase, item: Item, direction: 'up' | 'down') {

@@ -32,7 +32,7 @@ export type Item = {
   deletedAt: string | null;
 };
 
-export type SeriesEditScope = 'single' | 'series';
+export type SeriesEditScope = 'single' | 'series' | 'seriesWithExceptions';
 
 export type PlannedTask = Item & {
   listName: string;

@@ -85,7 +85,8 @@ export function getUpcomingRecurringDates(
   dueDate: string | null,
   recurrenceType: RecurrenceType,
   recurrenceConfig: string | null,
-  count = 4
+  count = 4,
+  referenceDate?: string
 ) {
   if (recurrenceType === 'none') {
     return [];
@@ -94,8 +95,12 @@ export function getUpcomingRecurringDates(
   const result: string[] = [];
   let current = isValidDateKey(dueDate) ? dueDate! : todayKey();
 
-  for (let index = 0; index < count; index += 1) {
+  while (result.length < count) {
     current = stepRecurrence(current, recurrenceType, recurrenceConfig);
+    if (referenceDate && current <= referenceDate) {
+      continue;
+    }
+
     result.push(current);
   }
 

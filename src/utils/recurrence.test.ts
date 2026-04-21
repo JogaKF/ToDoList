@@ -33,6 +33,14 @@ describe('recurrence utils', () => {
     ]);
   });
 
+  it('can skip overdue occurrences when building an upcoming preview', () => {
+    expect(getUpcomingRecurringDates('2026-04-10', 'daily', null, 3, '2026-04-13')).toEqual([
+      '2026-04-14',
+      '2026-04-15',
+      '2026-04-16',
+    ]);
+  });
+
   it('returns stable results for non-recurring items', () => {
     expect(getNextRecurringDate('2026-04-18', 'none', null, '2026-04-20')).toBe('2026-04-18');
     expect(getUpcomingRecurringDates('2026-04-18', 'none', null, 3)).toEqual([]);

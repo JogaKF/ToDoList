@@ -6,7 +6,7 @@ import type {
   SeriesEditScope,
 } from '../../features/items/types';
 import { createId } from '../../utils/id';
-import { nowIso } from '../../utils/date';
+import { nowIso, todayKey } from '../../utils/date';
 import { getNextRecurringDate } from '../../utils/recurrence';
 import {
   getAncestorIdsQuery,
@@ -52,6 +52,12 @@ type CreateItemInput = {
   recurrenceType?: RecurrenceType;
   recurrenceConfig?: string | null;
 };
+
+type RecurringLineageDirection = 'forward' | 'all';
+
+function isRecurringSeriesItem(item: Item) {
+  return item.recurrenceType !== 'none' || Boolean(item.recurrenceOriginId || item.previousRecurringItemId);
+}
 
 export const itemsRepository = {
   async getById(db: SQLiteDatabase, id: string) {
@@ -186,55 +192,58 @@ export const itemsRepository = {
     const timestamp = nowIso();
     const recurrenceOriginId = currentItem.recurrenceOriginId ?? currentItem.id;
 
-    if (scope === 'series' && currentItem.recurrenceType !== 'none') {
-      await db.runAsync(
-        `UPDATE items
-         SET title = ?, category = ?, quantity = ?, unit = ?, note = ?, dueDate = ?, recurrenceType = ?, recurrenceConfig = ?, recurrenceOriginId = ?, recurrenceIsException = 0, updatedAt = ?
-         WHERE deletedAt IS NULL
-           AND (id = ? OR recurrenceOriginId = ?)`,
-        title,
-        category,
-        quantity,
-        unit,
-        note,
-        input.dueDate,
-        input.recurrenceType,
-        input.recurrenceConfig,
-        input.recurrenceType === 'none' ? null : recurrenceOriginId,
-        timestamp,
-        currentItem.id,
-        recurrenceOriginId
+    if (scope !== 'single' && isRecurringSeriesItem(currentItem)) {
+      const lineageItems = await this.getRecurringLineageItems(db, currentItem.id, 'forward');
+      const targetItems = lineageItems.filter(
+        (lineageItem) =>
+          scope === 'seriesWithExceptions' ||
+          lineageItem.id === currentItem.id ||
+          lineageItem.recurrenceIsException === 0
       );
 
-      if (input.recurrenceType === 'none') {
-        await db.runAsync(
-          `UPDATE items
-           SET previousRecurringItemId = NULL, recurrenceOriginId = NULL, recurrenceIsException = 0, updatedAt = ?
-           WHERE deletedAt IS NULL
-             AND (id = ? OR recurrenceOriginId = ?)`,
-          timestamp,
-          currentItem.id,
-          recurrenceOriginId
-        );
-      }
+      await db.withExclusiveTransactionAsync(async (txn) => {
+        for (const targetItem of targetItems) {
+          await txn.runAsync(
+            `UPDATE items
+             SET title = ?, category = ?, quantity = ?, unit = ?, note = ?, dueDate = ?, recurrenceType = ?, recurrenceConfig = ?, recurrenceOriginId = ?, previousRecurringItemId = ?, recurrenceIsException = 0, updatedAt = ?
+             WHERE id = ? AND deletedAt IS NULL`,
+            title,
+            category,
+            quantity,
+            unit,
+            note,
+            input.dueDate,
+            input.recurrenceType,
+            input.recurrenceConfig,
+            input.recurrenceType === 'none' ? null : targetItem.recurrenceOriginId ?? recurrenceOriginId,
+            input.recurrenceType === 'none' ? null : targetItem.previousRecurringItemId,
+            timestamp,
+            targetItem.id
+          );
+        }
+      });
 
       await this.logActivity(
         db,
         currentItem.id,
         'series_updated',
-        `Zmieniono cala serie: ${title}`
+        scope === 'seriesWithExceptions'
+          ? `Zmieniono serie razem z wyjatkami: ${title}`
+          : `Zmieniono serie od tego wystapienia: ${title}`
       );
 
       return;
     }
 
+    const belongsToSeries = isRecurringSeriesItem(currentItem);
+    const nextRecurrenceOriginId =
+      input.recurrenceType === 'none' && !belongsToSeries
+        ? null
+        : currentItem.recurrenceOriginId ?? currentItem.id;
+
     await db.runAsync(
       `UPDATE items
-       SET title = ?, category = ?, quantity = ?, unit = ?, note = ?, dueDate = ?, recurrenceType = ?, recurrenceConfig = ?, recurrenceOriginId = CASE
-         WHEN ? != 'none' AND recurrenceOriginId IS NULL THEN id
-         WHEN ? = 'none' THEN NULL
-         ELSE recurrenceOriginId
-       END, recurrenceIsException = ?, updatedAt = ?
+       SET title = ?, category = ?, quantity = ?, unit = ?, note = ?, dueDate = ?, recurrenceType = ?, recurrenceConfig = ?, recurrenceOriginId = ?, recurrenceIsException = ?, updatedAt = ?
        WHERE id = ?`,
       title,
       category,
@@ -244,9 +253,8 @@ export const itemsRepository = {
       input.dueDate,
       input.recurrenceType,
       input.recurrenceConfig,
-      input.recurrenceType,
-      input.recurrenceType,
-      currentItem.recurrenceType !== 'none' ? 1 : 0,
+      nextRecurrenceOriginId,
+      belongsToSeries ? 1 : 0,
       timestamp,
       id
     );
@@ -266,34 +274,77 @@ export const itemsRepository = {
     }
 
     const timestamp = nowIso();
-    const recurrenceOriginId = currentItem.recurrenceOriginId ?? currentItem.id;
 
-    if (scope === 'series' && currentItem.recurrenceType !== 'none') {
-      await db.runAsync(
-        `UPDATE items
-         SET dueDate = ?, recurrenceIsException = 0, updatedAt = ?
-         WHERE deletedAt IS NULL
-           AND (id = ? OR recurrenceOriginId = ?)`,
-        dueDate,
-        timestamp,
-        currentItem.id,
-        recurrenceOriginId
+    if (scope !== 'single' && isRecurringSeriesItem(currentItem)) {
+      const lineageItems = await this.getRecurringLineageItems(db, currentItem.id, 'forward');
+      const targetItems = lineageItems.filter(
+        (lineageItem) =>
+          scope === 'seriesWithExceptions' ||
+          lineageItem.id === currentItem.id ||
+          lineageItem.recurrenceIsException === 0
       );
-      await this.logActivity(db, currentItem.id, 'series_rescheduled', `Przestawiono cala serie na ${dueDate ?? 'brak daty'}`);
+
+      await db.withExclusiveTransactionAsync(async (txn) => {
+        for (const targetItem of targetItems) {
+          await txn.runAsync(
+            `UPDATE items
+             SET dueDate = ?, recurrenceIsException = 0, updatedAt = ?
+             WHERE id = ? AND deletedAt IS NULL`,
+            dueDate,
+            timestamp,
+            targetItem.id
+          );
+        }
+      });
+
+      await this.logActivity(
+        db,
+        currentItem.id,
+        'series_rescheduled',
+        scope === 'seriesWithExceptions'
+          ? `Przestawiono serie z wyjatkami na ${dueDate ?? 'brak daty'}`
+          : `Przestawiono serie od tego wystapienia na ${dueDate ?? 'brak daty'}`
+      );
       return;
     }
 
+    const belongsToSeries = isRecurringSeriesItem(currentItem);
     await db.runAsync(
       `UPDATE items
-       SET dueDate = ?, recurrenceIsException = ?, updatedAt = ?
+       SET dueDate = ?, recurrenceOriginId = ?, recurrenceIsException = ?, updatedAt = ?
        WHERE id = ? AND deletedAt IS NULL`,
       dueDate,
-      currentItem.recurrenceType !== 'none' ? 1 : 0,
+      belongsToSeries ? currentItem.recurrenceOriginId ?? currentItem.id : currentItem.recurrenceOriginId,
+      belongsToSeries ? 1 : 0,
       timestamp,
       id
     );
 
     await this.logActivity(db, id, 'rescheduled', `Zmieniono termin na ${dueDate ?? 'brak daty'}`);
+  },
+
+  async catchUpRecurringOverdue(db: SQLiteDatabase, id: string, referenceDate = todayKey()) {
+    const currentItem = await this.getById(db, id);
+    if (!currentItem || currentItem.recurrenceType === 'none' || !currentItem.dueDate || currentItem.dueDate >= referenceDate) {
+      return null;
+    }
+
+    const nextDueDate = getNextRecurringDate(
+      currentItem.dueDate,
+      currentItem.recurrenceType,
+      currentItem.recurrenceConfig,
+      referenceDate
+    );
+
+    await this.updateDueDate(
+      db,
+      currentItem.id,
+      nextDueDate,
+      currentItem.recurrenceIsException ? 'single' : 'series'
+    );
+    await this.logActivity(db, currentItem.id, 'recurrence_caught_up', `Pominieto zalegle cykle do ${nextDueDate}`);
+
+    return nextDueDate;
   },
 
   async updateDueDateMany(db: SQLiteDatabase, ids: string[], dueDate: string | null) {
@@ -302,15 +353,25 @@ export const itemsRepository = {
     }
 
     const timestamp = nowIso();
+    const items = await db.getAllAsync<Item>(
+      `SELECT * FROM items
+       WHERE deletedAt IS NULL
+         AND id IN (${ids.map(() => '?').join(',')})`,
+      ...ids
+    );
+
     await db.withExclusiveTransactionAsync(async (txn) => {
-      for (const id of ids) {
+      for (const item of items) {
+        const belongsToSeries = isRecurringSeriesItem(item);
         await txn.runAsync(
           `UPDATE items
-           SET dueDate = ?, updatedAt = ?
+           SET dueDate = ?, recurrenceOriginId = ?, recurrenceIsException = ?, updatedAt = ?
            WHERE id = ? AND deletedAt IS NULL`,
           dueDate,
+          belongsToSeries ? item.recurrenceOriginId ?? item.id : item.recurrenceOriginId,
+          belongsToSeries ? 1 : item.recurrenceIsException,
           timestamp,
-          id
+          item.id
         );
       }
     });
@@ -480,7 +541,7 @@ export const itemsRepository = {
         isRoot ? nextDueDate : subtreeItem.dueDate,
         subtreeItem.recurrenceType,
         subtreeItem.recurrenceConfig,
-        subtreeItem.recurrenceOriginId ?? item.recurrenceOriginId ?? item.id,
+        subtreeItem.recurrenceOriginId ?? subtreeItem.id,
         subtreeItem.id,
         subtreeItem.recurrenceIsException,
         null,
@@ -692,4 +753,53 @@ export const itemsRepository = {
   getAncestorIds: getAncestorIdsQuery,
   getNextPosition: getNextPositionQuery,
   logActivity: logItemActivity,
+
+  async getRecurringLineageItems(db: SQLiteDatabase, itemId: string, direction: RecurringLineageDirection = 'forward') {
+    const allItems = await db.getAllAsync<Item>(
+      `SELECT * FROM items
+       WHERE deletedAt IS NULL`
+    );
+
+    const itemsById = new Map(allItems.map((item) => [item.id, item]));
+    const childrenByPrevious = new Map<string, Item[]>();
+
+    for (const item of allItems) {
+      if (!item.previousRecurringItemId) {
+        continue;
+      }
+
+      const bucket = childrenByPrevious.get(item.previousRecurringItemId) ?? [];
+      bucket.push(item);
+      bucket.sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+      childrenByPrevious.set(item.previousRecurringItemId, bucket);
+    }
+
+    const startItem = itemsById.get(itemId);
+    if (!startItem) {
+      return [];
+    }
+
+    let lineageStart = startItem;
+    if (direction === 'all') {
+      while (lineageStart.previousRecurringItemId) {
+        const previous = itemsById.get(lineageStart.previousRecurringItemId);
+        if (!previous) {
+          break;
+        }
+
+        lineageStart = previous;
+      }
+    }
+
+    const result: Item[] = [];
+    const visit = (current: Item) => {
+      result.push(current);
+      for (const nextItem of childrenByPrevious.get(current.id) ?? []) {
+        visit(nextItem);
+      }
+    };
+
+    visit(lineageStart);
+    return result;
+  },
 };

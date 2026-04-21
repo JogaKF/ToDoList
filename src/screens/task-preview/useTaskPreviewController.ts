@@ -44,6 +44,7 @@ export function useTaskPreviewController({ itemId }: UseTaskPreviewControllerPar
     const nextItem = await itemsService.getById(db, itemId);
     setItem(nextItem ?? null);
     setDraft(buildEditorState(nextItem ?? null));
+    setSaveScope('single');
     if (nextItem) {
       const [nextList, nextRelations, nextActivity] = await Promise.all([
         listsService.getById(db, nextItem.listId),
@@ -117,6 +118,10 @@ export function useTaskPreviewController({ itemId }: UseTaskPreviewControllerPar
       ),
     [item]
   );
+  const nextRecurringDate = useMemo(
+    () => (item && item.recurrenceType !== 'none' ? itemsService.getNextRecurringDate(item) : null),
+    [item]
+  );
   const recurringPreview = useMemo(() => (item ? itemsService.getRecurringPreview(item, 4) : []), [item]);
 
   const handleRescheduleRecurring = useCallback(
@@ -129,13 +134,26 @@ export function useTaskPreviewController({ itemId }: UseTaskPreviewControllerPar
       notifyMutation();
       await loadItem();
       setSaveMessage(
-        scope === 'series'
-          ? `Przestawiono cala serie na ${dateKey}.`
-          : `Przestawiono to wystapienie na ${dateKey}.`
+        scope === 'single'
+          ? `Przestawiono to wystapienie na ${dateKey}.`
+          : scope === 'seriesWithExceptions'
+            ? `Przestawiono serie razem z wyjatkami na ${dateKey}.`
+            : `Przestawiono serie od tego wystapienia na ${dateKey}.`
       );
     },
     [db, item, loadItem, notifyMutation]
   );
+
+  const handleCatchUpRecurring = useCallback(async () => {
+    if (!item) {
+      return;
+    }
+
+    const nextDate = await itemsService.catchUpRecurringOverdue(db, item.id);
+    notifyMutation();
+    await loadItem();
+    setSaveMessage(nextDate ? `Pominieto zalegle cykle. Nastepny termin: ${nextDate}.` : 'Ten cykl nie wymagal przesuniecia.');
+  }, [db, item, loadItem, notifyMutation]);
 
   const handleSave = useCallback(async () => {
     if (!item) {
@@ -176,7 +194,13 @@ export function useTaskPreviewController({ itemId }: UseTaskPreviewControllerPar
     await loadItem();
     setIsSaving(false);
     setErrorMessage(null);
-    setSaveMessage(saveScope === 'series' ? 'Zmiany zapisaly sie dla calej serii.' : 'Zmiany zapisaly sie lokalnie.');
+    setSaveMessage(
+      saveScope === 'single'
+        ? 'Zmiany zapisaly sie jako wyjatek tego wystapienia.'
+        : saveScope === 'seriesWithExceptions'
+          ? 'Zmiany zapisaly sie dla serii razem z wyjatkami.'
+          : 'Zmiany zapisaly sie dla serii od tego wystapienia, bez nadpisywania wyjatkow.'
+    );
   }, [db, draft, isTask, item, loadItem, notifyMutation, saveScope]);
 
   const handleReset = useCallback(() => {
@@ -294,12 +318,14 @@ export function useTaskPreviewController({ itemId }: UseTaskPreviewControllerPar
     allShoppingCategoryNames,
     isFavoriteShoppingItem,
     isRecurringOverdue,
+    nextRecurringDate,
     recurringPreview,
     shoppingCategories,
     shoppingFavorites,
     updateDraft,
     setDraft,
     handleRescheduleRecurring,
+    handleCatchUpRecurring,
     handleSave,
     handleReset,
     handleToggleDone,

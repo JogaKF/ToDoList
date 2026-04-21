@@ -26,6 +26,7 @@ type TaskDetailsContentProps = {
   allShoppingCategoryNames: string[];
   isFavoriteShoppingItem: boolean;
   isRecurringOverdue: boolean;
+  nextRecurringDate: string | null;
   recurringPreview: string[];
   onChangeCustomCategoryName: (value: string) => void;
   onUpdateDraft: <Key extends keyof TaskEditorState>(key: Key, value: TaskEditorState[Key]) => void;
@@ -33,6 +34,7 @@ type TaskDetailsContentProps = {
   onToggleDone: () => void;
   onSetMyDayDate: (dateKey: string | null) => void;
   onRescheduleRecurring: (dateKey: string, scope: SeriesEditScope) => void;
+  onCatchUpRecurring: () => void;
   onSetSaveScope: (scope: SeriesEditScope) => void;
   onAddCustomCategory: () => void;
   onSave: () => void;
@@ -58,6 +60,7 @@ export function TaskDetailsContent({
   allShoppingCategoryNames,
   isFavoriteShoppingItem,
   isRecurringOverdue,
+  nextRecurringDate,
   recurringPreview,
   onChangeCustomCategoryName,
   onUpdateDraft,
@@ -65,6 +68,7 @@ export function TaskDetailsContent({
   onToggleDone,
   onSetMyDayDate,
   onRescheduleRecurring,
+  onCatchUpRecurring,
   onSetSaveScope,
   onAddCustomCategory,
   onSave,
@@ -150,7 +154,8 @@ export function TaskDetailsContent({
           <View style={styles.overdueCard}>
             <Text style={styles.overdueTitle}>Zalegle wystapienie serii</Text>
             <Text style={styles.overdueText}>
-              To zadanie cykliczne ma termin w przeszlosci. Mozesz przesunac tylko to wystapienie albo od razu cala serie.
+              To zadanie cykliczne ma termin w przeszlosci. Mozesz zrobic wyjatek dla tego wystapienia, przesunac serie
+              od tego miejsca albo pominac zalegle cykle do nastepnego przewidywalnego terminu.
             </Text>
             <View style={styles.actionsWrap}>
               <PrimaryButton label="To wystapienie na dzis" tone="muted" onPress={() => onRescheduleRecurring(todayKey(), 'single')} />
@@ -159,7 +164,12 @@ export function TaskDetailsContent({
                 tone="muted"
                 onPress={() => onRescheduleRecurring(dateKeyWithOffset(1), 'single')}
               />
-              <PrimaryButton label="Cala seria na dzis" tone="primary" onPress={() => onRescheduleRecurring(todayKey(), 'series')} />
+              <PrimaryButton label="Seria od dzis" tone="primary" onPress={() => onRescheduleRecurring(todayKey(), 'series')} />
+              <PrimaryButton
+                label={nextRecurringDate ? `Pomin zalegle do ${formatDateLabel(nextRecurringDate)}` : 'Pomin zalegle cykle'}
+                tone="muted"
+                onPress={onCatchUpRecurring}
+              />
             </View>
           </View>
         ) : null}
@@ -334,15 +344,22 @@ export function TaskDetailsContent({
                     onPress={() => onSetSaveScope('single')}
                   />
                   <PrimaryButton
-                    label="Cala seria"
+                    label="Seria od tego miejsca"
                     tone={saveScope === 'series' ? 'primary' : 'muted'}
                     onPress={() => onSetSaveScope('series')}
                   />
+                  <PrimaryButton
+                    label="Seria + wyjatki"
+                    tone={saveScope === 'seriesWithExceptions' ? 'primary' : 'muted'}
+                    onPress={() => onSetSaveScope('seriesWithExceptions')}
+                  />
                 </View>
                 <Text style={styles.scopeHint}>
-                  {item.recurrenceIsException
-                    ? 'To zadanie jest juz wyjatkiem w swojej serii.'
-                    : 'Mozesz zmienic tylko to wystapienie albo od razu cala serie.'}
+                  {saveScope === 'single'
+                    ? 'Zapisze tylko ten element i oznaczy go jako wyjatek serii.'
+                    : saveScope === 'seriesWithExceptions'
+                      ? 'Nadpisze takze istniejace wyjatki i wlaczy je z powrotem do serii.'
+                      : 'Zapisze ten element i kolejne wystapienia, ale nie nadpisze istniejacych wyjatkow.'}
                 </Text>
               </>
             ) : null}

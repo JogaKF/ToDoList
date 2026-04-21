@@ -48,6 +48,7 @@ export function TaskPreviewScreen() {
         allShoppingCategoryNames={controller.allShoppingCategoryNames}
         isFavoriteShoppingItem={controller.isFavoriteShoppingItem}
         isRecurringOverdue={controller.isRecurringOverdue}
+        nextRecurringDate={controller.nextRecurringDate}
         recurringPreview={controller.recurringPreview}
         onChangeCustomCategoryName={controller.setCustomCategoryName}
         onUpdateDraft={controller.updateDraft}
@@ -55,6 +56,7 @@ export function TaskPreviewScreen() {
         onToggleDone={() => void controller.handleToggleDone()}
         onSetMyDayDate={(dateKey) => void controller.handleSetMyDayDate(dateKey)}
         onRescheduleRecurring={(dateKey, scope) => void controller.handleRescheduleRecurring(dateKey, scope)}
+        onCatchUpRecurring={() => void controller.handleCatchUpRecurring()}
         onSetSaveScope={controller.setSaveScope}
         onAddCustomCategory={() => void controller.handleAddCustomCategory()}
         onSave={() => void controller.handleSave()}
